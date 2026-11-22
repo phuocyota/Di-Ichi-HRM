@@ -1,0 +1,69 @@
+import { request } from './api.ts'
+import type { HrmSession } from './session.ts'
+
+export type EmployeeType = 'cskh' | 'sale'
+
+export type WorkShift = { id: string; name: string; start: string; end: string }
+
+export type WorkAssignment = {
+  id: string
+  kind: string
+  personId: string
+  branchId: string
+  date: string
+  start: string
+  end: string
+  shiftId?: string
+  employeeType?: EmployeeType
+  personName?: string
+}
+
+export type WorkPreference = { personId: string; branchId: string; date: string; shiftId: string }
+
+export type WorkSnapshot = {
+  branchId: string
+  revision: number
+  shifts: WorkShift[]
+  roster: { assignments: WorkAssignment[]; preferences: WorkPreference[]; attendance: unknown[] }
+  canAssign?: boolean
+}
+
+export type WorkEmployee = {
+  id: string
+  code: string
+  name: string
+  position: string
+  employeeTypes: EmployeeType[]
+}
+
+export type AssignItem = { personId: string; date: string; shiftId: string; employeeType: EmployeeType }
+
+export const EMPLOYEE_TYPE_LABEL: Record<EmployeeType, string> = { cskh: 'CSKH', sale: 'Sale' }
+
+export async function loginStaff(email: string, password: string): Promise<HrmSession> {
+  const data = await request<Partial<HrmSession>>('POST', '/auth/staff/login', { email, password })
+  if (!data.accessToken || !data.branchId) throw new Error('Tài khoản chưa được gắn với chi nhánh.')
+  return {
+    accessToken: data.accessToken,
+    userId: data.userId || '',
+    userType: data.userType || '',
+    branchId: data.branchId,
+    fullName: data.fullName || '',
+  }
+}
+
+const base = (branchId: string) => `/work-shifts/branches/${encodeURIComponent(branchId)}`
+
+export const getSnapshot = (branchId: string) => request<WorkSnapshot>('GET', base(branchId))
+
+export const getEmployees = (branchId: string) =>
+  request<{ employees: WorkEmployee[]; unclassified: number }>('GET', `${base(branchId)}/employees`)
+
+export const assignEmployees = (branchId: string, revision: number, assignments: AssignItem[]) =>
+  request<WorkSnapshot>('POST', `${base(branchId)}/employee-assignments`, { revision, assignments })
+
+export const removeAssignment = (branchId: string, assignmentId: string, revision: number) =>
+  request<WorkSnapshot>(
+    'DELETE',
+    `${base(branchId)}/assignments/${encodeURIComponent(assignmentId)}?revision=${revision}`,
+  )
