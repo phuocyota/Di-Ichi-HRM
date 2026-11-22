@@ -52,6 +52,12 @@ export async function loginStaff(email: string, password: string): Promise<HrmSe
   }
 }
 
+export type WorkBranch = { id: string; code: string; name: string }
+
+/** Cơ sở được phân lịch: tài khoản `super_hrm` nhận mọi cơ sở (`allBranches`), còn lại chỉ cơ sở của mình. */
+export const getBranches = () =>
+  request<{ homeBranchId: string; allBranches: boolean; branches: WorkBranch[] }>('GET', '/work-shifts/branches')
+
 const base = (branchId: string) => `/work-shifts/branches/${encodeURIComponent(branchId)}`
 
 export const getSnapshot = (branchId: string) => request<WorkSnapshot>('GET', base(branchId))

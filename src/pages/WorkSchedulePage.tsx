@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import AssignDialog from '../components/AssignDialog.tsx'
 import { addDays, cellAssignments, shortDate, todayVn, weekDays, weekStart, weekdayLabel } from '../lib/schedule.ts'
 import { ApiError } from '../services/api.ts'
@@ -6,19 +6,42 @@ import type { HrmSession } from '../services/session.ts'
 import {
   EMPLOYEE_TYPE_LABEL,
   assignEmployees,
+  getBranches,
   getEmployees,
   getSnapshot,
   removeAssignment,
   type AssignItem,
   type WorkAssignment,
+  type WorkBranch,
   type WorkEmployee,
   type WorkSnapshot,
 } from '../services/workShifts.ts'
 
 const CONFLICT = 'Lịch vừa được cập nhật ở nơi khác, đã tải lại dữ liệu mới. Vui lòng thao tác lại.'
 
+/** Cơ sở đang xem được nhớ theo tài khoản trên trình duyệt này (chỉ tiện ích, có thể mất). */
+const branchKey = (userId: string) => `diIchiHrmBranch:${userId}`
+const rememberedBranch = (userId: string) => {
+  try {
+    return localStorage.getItem(branchKey(userId))
+  } catch {
+    return null
+  }
+}
+const rememberBranch = (userId: string, branchId: string) => {
+  try {
+    localStorage.setItem(branchKey(userId), branchId)
+  } catch {
+    // Bỏ qua khi trình duyệt chặn lưu trữ.
+  }
+}
+
 export default function WorkSchedulePage({ session, onLogout }: { session: HrmSession; onLogout: () => void }) {
-  const branchId = session.branchId
+  const [branchId, setBranchId] = useState(session.branchId)
+  const [branches, setBranches] = useState<WorkBranch[]>([])
+  const [allBranches, setAllBranches] = useState(false)
+  /** Cơ sở của lần tải mới nhất: bỏ kết quả về muộn của cơ sở cũ khi đã đổi cơ sở. */
+  const latestBranch = useRef(branchId)
   const [week, setWeek] = useState(() => weekStart(todayVn()))
   const [snapshot, setSnapshot] = useState<WorkSnapshot | null>(null)
   const [canAssign, setCanAssign] = useState(false)
@@ -30,23 +53,58 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
   const [dialog, setDialog] = useState<{ shiftId: string; date: string } | null>(null)
   const [removing, setRemoving] = useState<WorkAssignment | null>(null)
 
+  useEffect(() => {
+    // Tải danh sách cơ sở được phân lịch (super_hrm: mọi cơ sở).
+    let active = true
+    getBranches()
+      .then((result) => {
+        if (!active) return
+        setBranches(result.branches)
+        setAllBranches(result.allBranches)
+        const saved = rememberedBranch(session.userId)
+        if (result.allBranches && saved && saved !== session.branchId && result.branches.some((b) => b.id === saved))
+          setBranchId(saved)
+      })
+      .catch(() => {
+        // Không lấy được danh sách: vẫn dùng cơ sở của tài khoản.
+      })
+    return () => {
+      active = false
+    }
+  }, [session.userId, session.branchId])
+
+  const changeBranch = (next: string) => {
+    if (next === branchId) return
+    rememberBranch(session.userId, next)
+    setSnapshot(null)
+    setEmployees([])
+    setUnclassified(0)
+    setNotice('')
+    setDialog(null)
+    setRemoving(null)
+    setBranchId(next)
+  }
+
   const load = useCallback(async () => {
+    latestBranch.current = branchId
     setLoading(true)
     setError('')
     try {
       const [next, catalog] = await Promise.all([getSnapshot(branchId), getEmployees(branchId)])
+      if (latestBranch.current !== branchId) return
       setSnapshot(next)
       setCanAssign(Boolean(next.canAssign))
       setEmployees(catalog.employees)
       setUnclassified(catalog.unclassified)
     } catch (cause) {
+      if (latestBranch.current !== branchId) return
       setError(
         cause instanceof ApiError && cause.status === 403
           ? 'Tài khoản chưa được cấp vai trò "Nhân sự phân lịch". Liên hệ quản trị viên để được cấp quyền.'
           : cause instanceof Error ? cause.message : 'Không tải được phân lịch.',
       )
     } finally {
-      setLoading(false)
+      if (latestBranch.current === branchId) setLoading(false)
     }
   }, [branchId])
 
@@ -108,6 +166,21 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
           <div>
             <h1>Phân lịch làm việc</h1>
             <p className="muted">Phân nhân viên CSKH / Sale vào ca làm của cơ sở. {weekCount} lịch trong tuần.</p>
+            {allBranches && branches.length > 0 ? (
+              <label className="branch-picker">
+                Cơ sở
+                <select value={branchId} onChange={(event) => changeBranch(event.target.value)} disabled={loading}>
+                  {branches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                      {branch.id === session.branchId ? ' (cơ sở của bạn)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              branches[0] && <p className="muted">Cơ sở: {branches[0].name}</p>
+            )}
           </div>
           <div className="week-nav">
             <button onClick={() => setWeek(addDays(week, -7))} aria-label="Tuần trước">‹</button>

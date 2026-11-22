@@ -132,6 +132,8 @@ label { display: grid; gap: 4px; font-weight: 500; }
 .content p { margin: 0; }
 .heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; align-items: end; }
 .week-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.branch-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.branch-picker select { min-width: 220px; max-width: 100%; }
 
 .grid-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
 .grid { border-collapse: collapse; width: 100%; min-width: 900px; }
