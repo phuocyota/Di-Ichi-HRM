@@ -37,7 +37,8 @@ const rememberBranch = (userId: string, branchId: string) => {
 }
 
 export default function WorkSchedulePage({ session, onLogout }: { session: HrmSession; onLogout: () => void }) {
-  const [branchId, setBranchId] = useState(session.branchId)
+  // SUPER_HRM không có cơ sở: chờ danh sách cơ sở rồi chọn cơ sở đã nhớ hoặc cơ sở đầu tiên.
+  const [branchId, setBranchId] = useState(session.branchId ?? '')
   const [branches, setBranches] = useState<WorkBranch[]>([])
   const [allBranches, setAllBranches] = useState(false)
   /** Cơ sở của lần tải mới nhất: bỏ kết quả về muộn của cơ sở cũ khi đã đổi cơ sở. */
@@ -64,9 +65,19 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
         const saved = rememberedBranch(session.userId)
         if (result.allBranches && saved && saved !== session.branchId && result.branches.some((b) => b.id === saved))
           setBranchId(saved)
+        else if (!session.branchId) {
+          if (result.branches[0]) setBranchId(result.branches[0].id)
+          else {
+            setError('Chưa có cơ sở nào để phân lịch.')
+            setLoading(false)
+          }
+        }
       })
-      .catch(() => {
-        // Không lấy được danh sách: vẫn dùng cơ sở của tài khoản.
+      .catch((cause) => {
+        // Không lấy được danh sách: vẫn dùng cơ sở của tài khoản (SUPER_HRM không có cơ sở thì báo lỗi).
+        if (!active || session.branchId) return
+        setError(cause instanceof Error ? cause.message : 'Không tải được danh sách cơ sở.')
+        setLoading(false)
       })
     return () => {
       active = false
@@ -87,6 +98,7 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
 
   const load = useCallback(async () => {
     latestBranch.current = branchId
+    if (!branchId) return
     setLoading(true)
     setError('')
     try {

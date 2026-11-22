@@ -3,9 +3,13 @@ export type HrmSession = {
   accessToken: string
   userId: string
   userType: string
-  branchId: string
+  /** Cơ sở của nhân sự; `null` với tài khoản SUPER_HRM (không gắn cơ sở, phân lịch mọi cơ sở). */
+  branchId: string | null
   fullName: string
 }
+
+/** Loại tài khoản phân lịch toàn hệ thống: chỉ có tài khoản, không gắn nhân sự/cơ sở. */
+export const SUPER_HRM = 'SUPER_HRM'
 
 const SESSION_KEY = 'diIchiHrmSession'
 
@@ -15,7 +19,7 @@ export function getSession(): HrmSession | null {
     const raw = sessionStorage.getItem(SESSION_KEY) ?? localStorage.getItem(SESSION_KEY)
     if (!raw) return null
     const value = JSON.parse(raw) as Partial<HrmSession>
-    return value.accessToken && value.branchId ? (value as HrmSession) : null
+    return value.accessToken && (value.branchId || value.userType === SUPER_HRM) ? (value as HrmSession) : null
   } catch {
     return null
   }
