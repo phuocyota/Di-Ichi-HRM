@@ -62,7 +62,17 @@ label { display: grid; gap: 4px; font-weight: 500; }
 .notice { color: var(--success); }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
 
-.login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+.login {
+  min-height: 100vh; display: grid; place-items: center; padding: 16px;
+  /* Đồng bộ background đăng nhập với Di-Ichi-Employee/CRM/Teacher */
+  background-color: #431407;
+  background-image:
+    radial-gradient(circle at top right, rgba(251, 146, 60, 0.35), transparent 28rem),
+    linear-gradient(120deg, rgba(124, 45, 18, 0.72), rgba(255, 247, 237, 0.2)),
+    url('./assets/images/backgroud_login.png');
+  background-position: center;
+  background-size: cover;
+}
 .login-card { width: min(380px, 100%); display: grid; gap: 14px; }
 
 .topbar {
