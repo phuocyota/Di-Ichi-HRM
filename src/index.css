@@ -73,7 +73,55 @@ label { display: grid; gap: 4px; font-weight: 500; }
   background-position: center;
   background-size: cover;
 }
-.login-card { width: min(380px, 100%); display: grid; gap: 14px; }
+/* Thẻ đăng nhập: cùng giao diện với LoginCard của Di-Ichi-Employee (màu cố định, không đổi theo dark mode). */
+.login-card {
+  width: 100%; max-width: 448px; padding: 32px;
+  color: #1f2937; color-scheme: light;
+  background: rgb(255 255 255 / 0.9);
+  border: 1px solid rgb(255 255 255 / 0.6);
+  border-radius: 24px;
+  box-shadow: 0 25px 50px -12px rgb(67 20 7 / 0.2);
+  backdrop-filter: blur(8px);
+}
+.login-brand { text-align: center; }
+.login-logo { display: block; width: 128px; height: 128px; margin: 0 auto; object-fit: contain; }
+.login-brand h1 { margin: 20px 0 0; font-size: 1.5rem; line-height: 2rem; font-weight: 900; color: #020617; }
+.login-brand p { margin: 8px 0 0; font-size: 0.875rem; line-height: 1.25rem; color: #64748b; }
+.login-form { margin-top: 28px; display: grid; gap: 16px; }
+.login-field { display: block; }
+.login-field > span { font-size: 0.875rem; font-weight: 700; color: #334155; }
+.login-input {
+  margin-top: 8px; height: 48px; padding: 0 16px;
+  display: flex; align-items: center; gap: 12px;
+  background: #fff; border: 1px solid #ffedd5; border-radius: 16px;
+  color: #f97316;
+}
+.login-input:focus-within { border-color: #fdba74; box-shadow: 0 0 0 4px #ffedd5; }
+.login-input input {
+  flex: 1; min-width: 0; padding: 0; border: 0; border-radius: 0;
+  background: transparent; color: #1f2937; font-size: 0.875rem; outline: none;
+}
+.login-input input::placeholder { color: #9ca3af; }
+.login-eye {
+  width: 32px; height: 32px; padding: 0; display: grid; place-items: center;
+  border: 0; border-radius: 8px; background: transparent; color: #94a3b8;
+  transition: background-color 0.15s, color 0.15s;
+}
+.login-eye:hover { background: #fff7ed; color: #ea580c; }
+.login-remember { display: flex; align-items: center; gap: 8px; font-size: 0.875rem; font-weight: 600; color: #475569; }
+.login-remember input { width: 16px; height: 16px; margin: 0; accent-color: #ea580c; }
+.login-error { margin: 0; font-size: 0.875rem; color: #c62828; }
+.login-submit {
+  width: 100%; min-height: 40px; padding: 8px 16px;
+  border: 0; border-radius: 12px; background: #ea580c; color: #fff;
+  font-size: 0.875rem; font-weight: 600; transition: background-color 0.15s;
+}
+.login-submit:hover:not(:disabled) { background: #c2410c; }
+.login-submit:disabled { cursor: not-allowed; }
+@media (max-width: 767px) {
+  .login-card { padding: 24px; }
+  .login-logo { width: 112px; height: 112px; }
+}
 
 .topbar {
   display: flex; align-items: center; gap: 12px; padding: 10px 16px;
