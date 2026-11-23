@@ -4,7 +4,10 @@
 
 .hrm-directory-scroll { overflow-x: auto; }
 .hrm-directory-scroll:focus-visible { outline: 2px solid var(--hrm-blue); outline-offset: -2px; }
-.hrm-directory-table { width: 100%; min-width: 745px; border-collapse: collapse; text-align: left; font-size: 13px; }
+.hrm-directory-table { width: 100%; min-width: 840px; border-collapse: collapse; text-align: left; font-size: 13px; }
+.hrm-directory-table.hrm-compact-table { min-width: 530px; }
+.hrm-directory-add { display: inline-flex; align-items: center; gap: 6px; }
+.hrm-defer-branch { display: flex; align-items: center; gap: 8px; }
 .hrm-directory-table thead { background: #eef3f9; color: #475467; }
 .hrm-directory-table :is(th, td) { padding: 10px 16px; border-bottom: 1px solid var(--hrm-line); }
 .hrm-directory-table th { font-weight: 600; }

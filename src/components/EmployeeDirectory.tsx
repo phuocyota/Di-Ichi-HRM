@@ -31,7 +31,7 @@ export default function EmployeeDirectory({ today, employees, assignments, uncla
   const keyword = workSearchText(search)
   const filtered = employees.filter((employee) =>
     (!type || employee.employeeTypes.includes(type))
-    && (!keyword || workSearchText(`${employee.name} ${employee.code} ${employee.position}`).includes(keyword)),
+    && (!keyword || workSearchText(`${employee.name} ${employee.code} ${employee.position} ${employee.department ?? ''}`).includes(keyword)),
   )
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const currentPage = Math.min(page, totalPages)
@@ -50,7 +50,7 @@ export default function EmployeeDirectory({ today, employees, assignments, uncla
       <div className="hrm-filters hrm-directory-filters">
         <label className="hrm-quick-search">
           <Search size={16} aria-hidden="true" />
-          <input type="search" aria-label="Tìm nhân viên" placeholder="Tìm tên, mã hoặc chức vụ…" value={search} onChange={(event) => {
+          <input type="search" aria-label="Tìm nhân viên" placeholder="Tìm tên, mã, chức vụ hoặc phòng ban…" value={search} onChange={(event) => {
             setSearch(event.target.value)
             setPage(1)
           }} />
@@ -78,7 +78,7 @@ export default function EmployeeDirectory({ today, employees, assignments, uncla
         <table className="hrm-directory-table">
           <thead>
             <tr>
-              <th scope="col">Mã NV</th><th scope="col">Họ và tên</th><th scope="col">Chức vụ</th>
+              <th scope="col">Mã NV</th><th scope="col">Họ và tên</th><th scope="col">Phòng ban</th><th scope="col">Chức vụ</th>
               <th scope="col">Nhóm phân ca</th><th scope="col">Ca trong tuần</th><th scope="col">Thao tác</th>
             </tr>
           </thead>
@@ -87,6 +87,7 @@ export default function EmployeeDirectory({ today, employees, assignments, uncla
               <tr key={employee.id}>
                 <td className="hrm-directory-code">{employee.code || '—'}</td>
                 <th scope="row">{employee.name}</th>
+                <td>{employee.department || '—'}</td>
                 <td>{employee.position || '—'}</td>
                 <td>
                   <div className="hrm-directory-tags">
@@ -111,7 +112,7 @@ export default function EmployeeDirectory({ today, employees, assignments, uncla
               </tr>
             ))}
             {!rows.length && (
-              <tr><td colSpan={6} className="hrm-directory-empty">
+              <tr><td colSpan={7} className="hrm-directory-empty">
                 {employees.length ? 'Không tìm thấy nhân viên phù hợp.' : 'Chi nhánh chưa có nhân viên đủ điều kiện phân ca.'}
               </td></tr>
             )}

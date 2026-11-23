@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { CalendarDays, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Search, Users, X } from 'lucide-react'
+import { Building2, CalendarDays, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Search, Users, X } from 'lucide-react'
 import diIchiLogo from '../assets/logo/LOGO_Diichi.webp'
 import './HrmLayout.css'
 
-export type HrmView = 'overview' | 'employees' | 'calendar' | 'shifts'
+export type HrmView = 'overview' | 'employees' | 'departments' | 'calendar' | 'shifts'
 type Props = {
   fullName: string
-  branchName?: string
+  accountScope?: string
   view: HrmView
   onViewChange: (view: HrmView) => void
   onLogout: () => void
@@ -25,7 +25,7 @@ const readCollapsed = () => {
 }
 
 export default function HrmLayout({
-  fullName, branchName, view, onViewChange, onLogout, search, onSearch, children,
+  fullName, accountScope, view, onViewChange, onLogout, search, onSearch, children,
 }: Props) {
   const [collapsed, setCollapsed] = useState(readCollapsed)
   const drawer = useRef<HTMLDialogElement>(null)
@@ -69,6 +69,10 @@ export default function HrmLayout({
       <button type="button" title="Quản lý nhân viên" aria-current={view === 'employees' ? 'page' : undefined} onClick={() => navigate('employees')}>
         <Users className="hrm-nav-icon" aria-hidden="true" />
         <span>Quản lý nhân viên</span>
+      </button>
+      <button type="button" title="Quản lý phòng ban" aria-current={view === 'departments' ? 'page' : undefined} onClick={() => navigate('departments')}>
+        <Building2 className="hrm-nav-icon" aria-hidden="true" />
+        <span>Quản lý phòng ban</span>
       </button>
       <button type="button" title="Lịch làm việc" aria-current={view === 'calendar' || view === 'shifts' ? 'page' : undefined} onClick={() => navigate('calendar')}>
         <CalendarDays className="hrm-nav-icon" aria-hidden="true" />
@@ -135,7 +139,7 @@ export default function HrmLayout({
             <span className="hrm-user-avatar" aria-hidden="true">{initials}</span>
             <div className="hrm-user-details">
               <strong>{name}</strong>
-              {branchName && <small>{branchName}</small>}
+              {accountScope && <small>{accountScope}</small>}
             </div>
           </div>
         </header>

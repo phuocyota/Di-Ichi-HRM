@@ -34,10 +34,26 @@ export type WorkEmployee = {
   code: string
   name: string
   position: string
+  department?: string
   employeeTypes: EmployeeType[]
 }
 
 export type AssignItem = { personId: string; date: string; shiftId: string; employeeType: EmployeeType }
+
+export type NewWorkEmployee = {
+  code: string
+  name: string
+  departmentId: string
+  phone?: string
+  email: string
+}
+
+export type WorkEmployeeCredentials = { email: string; password: string }
+type CreatedWorkEmployee = Pick<WorkEmployee, 'id' | 'code' | 'name'> & { credentials: WorkEmployeeCredentials }
+export type WorkEmployeeDraft = Omit<NewWorkEmployee, 'email'> & { id: string; email?: string }
+export type WorkDepartment = { id: string; code: string; name: string; status: string }
+export type WorkDepartmentInput = Omit<WorkDepartment, 'id' | 'status'> & { status: 'active' | 'inactive' }
+export const isActiveDepartment = (department: WorkDepartment) => department.status.trim().toLowerCase() === 'active'
 
 export const EMPLOYEE_TYPE_LABEL: Record<EmployeeType, string> = { cskh: 'CSKH', sale: 'Sale' }
 
@@ -59,6 +75,9 @@ export type WorkBranch = { id: string; code: string; name: string }
 /** Cơ sở được phân lịch: tài khoản `super_hrm` nhận mọi cơ sở (`allBranches`), còn lại chỉ cơ sở của mình. */
 export const getBranches = () =>
   request<{ homeBranchId: string | null; allBranches: boolean; branches: WorkBranch[] }>('GET', '/work-shifts/branches')
+
+export const getEmployeeBranches = () =>
+  request<WorkBranch[]>('GET', '/work-shifts/employee-branches')
 
 const base = (branchId: string) => `/work-shifts/branches/${encodeURIComponent(branchId)}`
 
@@ -82,7 +101,35 @@ export const configureWorkShifts = (branchId: string, revision: number, shifts: 
   request<WorkSnapshot>('PUT', base(branchId), { revision, shifts })
 
 export const getEmployees = (branchId: string) =>
-  request<{ employees: WorkEmployee[]; unclassified: number }>('GET', `${base(branchId)}/employees`)
+  request<{ employees: WorkEmployee[]; unclassified: number; canCreateEmployee?: boolean }>('GET', `${base(branchId)}/employees`)
+
+export const createWorkEmployee = (branchId: string, employee: NewWorkEmployee) =>
+  request<CreatedWorkEmployee>('POST', `${base(branchId)}/employees`, employee)
+
+export const getWorkDepartments = (branchId: string) =>
+  request<{ departments: WorkDepartment[]; canManage: boolean }>('GET', `${base(branchId)}/departments`)
+
+export const saveWorkDepartment = (branchId: string, department: WorkDepartmentInput, id?: string) =>
+  request<WorkDepartment>(
+    id ? 'PATCH' : 'POST',
+    `${base(branchId)}/departments${id ? `/${encodeURIComponent(id)}` : ''}`,
+    department,
+  )
+
+const draftsPath = (branchId: string) => `${base(branchId)}/employee-drafts`
+
+export const getWorkEmployeeDrafts = (branchId: string) =>
+  request<WorkEmployeeDraft[]>('GET', draftsPath(branchId))
+
+export const saveWorkEmployeeDraft = (branchId: string, employee: NewWorkEmployee, id?: string) =>
+  request<WorkEmployeeDraft>(
+    id ? 'PATCH' : 'POST',
+    `${draftsPath(branchId)}${id ? `/${encodeURIComponent(id)}` : ''}`,
+    employee,
+  )
+
+export const attachWorkEmployeeDraft = (branchId: string, id: string) =>
+  request<CreatedWorkEmployee>('POST', `${draftsPath(branchId)}/${encodeURIComponent(id)}/attach`)
 
 export const assignEmployees = (branchId: string, revision: number, assignments: AssignItem[]) =>
   request<WorkSnapshot>('POST', `${base(branchId)}/employee-assignments`, { revision, assignments })

@@ -1,28 +1,39 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CalendarDays, CalendarOff, ChevronRight, RefreshCw, Users } from 'lucide-react'
+import { CalendarDays, CalendarOff, ChevronRight, RefreshCw, UserPlus, Users } from 'lucide-react'
 import AssignDialog, { type AssignmentSeed } from '../components/AssignDialog.tsx'
+import CreateEmployeeDialog from '../components/CreateEmployeeDialog.tsx'
+import DepartmentsPanel from '../components/DepartmentsPanel.tsx'
 import EmployeeDirectory from '../components/EmployeeDirectory.tsx'
+import EmployeeCredentialsDialog from '../components/EmployeeCredentialsDialog.tsx'
 import HrmLayout, { type HrmView } from '../components/HrmLayout.tsx'
 import ShiftManagement from '../components/ShiftManagement.tsx'
 import WorkOverview from '../components/WorkOverview.tsx'
 import WorkTimeGrid from '../components/WorkTimeGrid.tsx'
 import { addDays, todayVn, weekDays, weekStart, workSearchText } from '../lib/schedule.ts'
 import { ApiError } from '../services/api.ts'
-import type { HrmSession } from '../services/session.ts'
+import { SUPER_HRM, type HrmSession } from '../services/session.ts'
 import {
   EMPLOYEE_TYPE_LABEL,
   assignEmployees,
+  attachWorkEmployeeDraft,
   configureWorkShifts,
+  createWorkEmployee,
   getBranches,
   getEmployees,
   getSnapshot,
+  getWorkDepartments,
+  getWorkEmployeeDrafts,
   getWorkOverview,
   removeAssignment,
+  saveWorkEmployeeDraft,
   type AssignItem,
   type BranchWorkOverview,
+  type NewWorkEmployee,
   type WorkAssignment,
   type WorkBranch,
   type WorkEmployee,
+  type WorkEmployeeCredentials,
+  type WorkEmployeeDraft,
   type WorkSnapshot,
 } from '../services/workShifts.ts'
 import './WorkSchedulePage.css'
@@ -31,10 +42,31 @@ const CONFLICT = 'Lịch vừa được cập nhật ở nơi khác, đã tải 
 const pageTitles: Record<HrmView, string> = {
   overview: 'Tổng quan',
   employees: 'Quản lý nhân viên',
+  departments: 'Quản lý phòng ban',
   calendar: 'Phân lịch làm việc',
   shifts: 'Quản lý ca làm',
 }
 type OverviewLoad = { request: number; results: BranchWorkOverview[]; error: string }
+type BranchResult<T> = { branchId: string; revision: number } & ({ data: T; error?: undefined } | { data?: undefined; error: string })
+
+function useBranchResource<T>(fetcher: (branch: string) => Promise<T>, branchId: string, revision: number, enabled: boolean) {
+  const [result, setResult] = useState<BranchResult<T> | null>(null)
+  useEffect(() => {
+    if (!enabled || !branchId) return
+    let current = true
+    void fetcher(branchId).then(
+      (data) => { if (current) setResult({ branchId, revision, data }) },
+      (cause: unknown) => {
+        if (current) setResult({
+          branchId, revision,
+          error: cause instanceof Error ? cause.message : 'Không tải được dữ liệu. Vui lòng thử lại.',
+        })
+      },
+    )
+    return () => { current = false }
+  }, [branchId, enabled, fetcher, revision])
+  return enabled && result?.branchId === branchId && result.revision === revision ? result : null
+}
 
 /** Cơ sở đang xem được nhớ theo tài khoản trên trình duyệt này (chỉ tiện ích, có thể mất). */
 const branchKey = (userId: string) => `diIchiHrmBranch:${userId}`
@@ -63,6 +95,12 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
   const [week, setWeek] = useState(() => weekStart(todayVn()))
   const [snapshot, setSnapshot] = useState<WorkSnapshot | null>(null)
   const [canAssign, setCanAssign] = useState(false)
+  const [canCreateEmployee, setCanCreateEmployee] = useState(false)
+  const [employeeForm, setEmployeeForm] = useState<WorkEmployeeDraft | 'new' | null>(null)
+  const [employeeCredentials, setEmployeeCredentials] = useState<WorkEmployeeCredentials | null>(null)
+  const [attachingDraft, setAttachingDraft] = useState<string | null>(null)
+  const [draftError, setDraftError] = useState('')
+  const [hrRevision, setHrRevision] = useState(0)
   const [employees, setEmployees] = useState<WorkEmployee[]>([])
   const [unclassified, setUnclassified] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -80,6 +118,11 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
   const [removing, setRemoving] = useState(false)
   const detailRef = useRef<HTMLDialogElement>(null)
   const showOverview = view === 'overview'
+  const showEmployees = view === 'employees'
+  const showDepartments = view === 'departments'
+  const departmentCatalog = useBranchResource(getWorkDepartments, branchId, hrRevision, showEmployees || showDepartments)
+  const draftCatalog = useBranchResource(getWorkEmployeeDrafts, branchId, hrRevision, showEmployees && canCreateEmployee)
+  const departments = departmentCatalog?.data?.departments ?? []
   const overview = overviewLoad?.request === overviewRequest ? overviewLoad : null
   const selectedOverviewBranch = overview?.results.find(({ branch }) => branch.id === selected?.branchId)
   const canRemove = selected && (showOverview
@@ -140,11 +183,15 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
   }, [session.userId, session.branchId, showOverview])
 
   const changeBranch = (next: string) => {
-    if (next === branchId || savingShifts) return
+    if (next === branchId || savingShifts || attachingDraft) return
     rememberBranch(session.userId, next)
     latestBranch.current = next
     setSnapshot(null)
     setEmployees([])
+    setCanCreateEmployee(false)
+    setEmployeeForm(null)
+    setDraftError('')
+    setHrRevision((revision) => revision + 1)
     setUnclassified(0)
     setNotice('')
     setCalendarPersonId(null)
@@ -172,12 +219,14 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
       setSnapshot(next)
       setCanAssign(Boolean(next.canAssign))
       setEmployees(catalog.employees)
+      setCanCreateEmployee(Boolean(catalog.canCreateEmployee))
       setUnclassified(catalog.unclassified)
     } catch (cause) {
       if (latestBranch.current !== branchId) return
       if (cause instanceof ApiError && cause.status === 403) {
         setSnapshot(null)
         setEmployees([])
+        setCanCreateEmployee(false)
         setUnclassified(0)
         setCanAssign(false)
       }
@@ -192,11 +241,45 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
   }, [branchId])
 
   useEffect(() => {
-    if (showOverview) return
+    if (showOverview || showDepartments) return
     // Tải dữ liệu từ máy chủ khi mở trang (đồng bộ với hệ thống bên ngoài).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load()
-  }, [load, showOverview])
+  }, [load, showDepartments, showOverview])
+
+  const addEmployee = async (employee: NewWorkEmployee, targetBranch?: WorkBranch) => {
+    const draftId = employeeForm && employeeForm !== 'new' ? employeeForm.id : undefined
+    const saved = targetBranch
+      ? await createWorkEmployee(targetBranch.id, employee)
+      : await saveWorkEmployeeDraft(branchId, employee, draftId)
+    if (latestBranch.current !== branchId) return
+    setEmployeeForm(null)
+    if ('credentials' in saved) setEmployeeCredentials(saved.credentials)
+    setNotice(targetBranch
+      ? `Đã thêm ${saved.name} (${saved.code}) tại ${targetBranch.name}.`
+      : `Đã lưu hồ sơ chờ của ${saved.name} (${saved.code}).`)
+    setHrRevision((revision) => revision + 1)
+    if (targetBranch?.id === branchId) void load()
+  }
+
+  const attachDraft = async (id: string) => {
+    if (attachingDraft) return
+    setAttachingDraft(id)
+    setDraftError('')
+    try {
+      const employee = await attachWorkEmployeeDraft(branchId, id)
+      if (latestBranch.current !== branchId) return
+      setEmployeeCredentials(employee.credentials)
+      setNotice(`Đã gán chi nhánh cho ${employee.name} (${employee.code}).`)
+      setHrRevision((revision) => revision + 1)
+      void load()
+    } catch (cause) {
+      if (latestBranch.current === branchId)
+        setDraftError(cause instanceof Error ? cause.message : 'Không gán được chi nhánh.')
+    } finally {
+      setAttachingDraft(null)
+    }
+  }
 
   /** Ghi phân lịch; 409 (revision lệch) thì tải lại và báo người dùng. */
   const mutate = async (action: (revision: number) => Promise<WorkSnapshot>, message: string, revision = snapshot?.revision) => {
@@ -267,6 +350,7 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
   const days = weekDays(week)
   const end = days[6]
   const branchName = branches.find((branch) => branch.id === branchId)?.name
+  const homeBranchName = branches.find((branch) => branch.id === session.branchId)?.name
   const shifts = snapshot?.shifts || []
   const assignments = snapshot?.roster.assignments.filter((item) => item.branchId === branchId && item.kind === 'employee') || []
   const weekAssignments = assignments.filter((item) => item.date >= week && item.date <= end)
@@ -294,18 +378,19 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
     window.scrollTo(0, 0)
   }
   const defaultShift = shifts[0]
-  const showEmployees = view === 'employees'
   const showCalendar = view === 'calendar'
   const showShiftManagement = view === 'shifts'
   const pageTitle = pageTitles[view]
   const description = {
     overview: 'Tổng hợp ca làm và ngày nghỉ từ tất cả chi nhánh được phép xem.',
     employees: branchName ? `Tra cứu nhân viên và phân ca tại ${branchName}.` : 'Tra cứu nhân viên và phân ca theo chi nhánh.',
+    departments: 'Tạo, cập nhật và theo dõi trạng thái phòng ban theo chi nhánh.',
     calendar: 'Quản lý lịch làm việc của nhân viên CSKH và Sale theo chi nhánh.',
     shifts: 'Thiết lập ca sáng, ca tối và các ca bổ sung theo chi nhánh.',
   }[view]
+  const refreshing = showDepartments ? !departmentCatalog : loading
   const branchPicker = allBranches && branches.length > 0 && (
-    <select aria-label="Chi nhánh" value={branchId} onChange={(event) => changeBranch(event.target.value)} disabled={loading || savingShifts}>
+    <select aria-label="Cơ sở đang xem" value={branchId} onChange={(event) => changeBranch(event.target.value)} disabled={refreshing || savingShifts || Boolean(attachingDraft)}>
       {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
     </select>
   )
@@ -313,11 +398,12 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
   return (
     <HrmLayout
       fullName={session.fullName}
-      branchName={showOverview ? undefined : branchName}
+      accountScope={session.userType === SUPER_HRM ? 'Tài khoản toàn hệ thống' : homeBranchName}
       view={view}
       onViewChange={(next) => {
         if (next === 'overview') refreshOverview()
         setNotice('')
+        setDraftError('')
         setView(next)
       }}
       onLogout={onLogout}
@@ -339,12 +425,21 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
             <p>{description}</p>
           </div>
           <div className="hrm-page-actions">
-            {showEmployees && branchPicker}
-            <button type="button" onClick={showOverview ? refreshOverview : () => void load()}
-              disabled={showOverview ? !overview || removing : loading || savingShifts || !branchId}>
+            {(showEmployees || showDepartments) && branchPicker}
+            <button type="button" onClick={showOverview ? refreshOverview : () => {
+              if (showEmployees || showDepartments) setHrRevision((revision) => revision + 1)
+              if (!showDepartments) void load()
+            }}
+              disabled={showOverview ? !overview || removing : refreshing || savingShifts || !branchId}>
               <RefreshCw size={16} aria-hidden="true" />
-              {(showOverview ? !overview : loading) ? 'Đang tải…' : 'Tải lại'}
+              {(showOverview ? !overview : refreshing) ? 'Đang tải…' : 'Tải lại'}
             </button>
+            {showEmployees && canCreateEmployee && (
+              <button type="button" className="hrm-add" onClick={() => setEmployeeForm('new')} disabled={loading || !departments.length || Boolean(attachingDraft)}>
+                <UserPlus size={16} aria-hidden="true" />
+                Thêm nhân viên
+              </button>
+            )}
           </div>
         </div>
         {(showCalendar || showShiftManagement) && (
@@ -354,9 +449,9 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
           </nav>
         )}
       </header>
-      {!showOverview && error && <p className="hrm-message hrm-message-error" role="alert">{error}</p>}
+      {!showOverview && (!showDepartments || !branchId) && error && <p className="hrm-message hrm-message-error" role="alert">{error}</p>}
       {notice && <p className="hrm-message hrm-message-success" role="status">{notice}</p>}
-      {!showOverview && snapshot && !canAssign && <p className="hrm-message">Bạn có quyền xem lịch làm việc.</p>}
+      {!showOverview && !showDepartments && snapshot && !canAssign && <p className="hrm-message">Bạn có quyền xem lịch làm việc.</p>}
       {showOverview && overviewActionError && <p className="hrm-message hrm-message-error" role="alert">{overviewActionError}</p>}
       {showOverview && !overview && <p className="hrm-message" role="status">Đang tải tổng quan phân ca…</p>}
       {showOverview && overview?.error && <p className="hrm-message hrm-message-error" role="alert">{overview.error}</p>}
@@ -370,6 +465,68 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
         />
       )}
       {showEmployees && loading && <p className="hrm-message" role="status">Đang tải danh sách nhân viên…</p>}
+      {(showDepartments || (showEmployees && canCreateEmployee)) && branchId && !departmentCatalog && (
+        <p className="hrm-message" role="status">Đang tải phòng ban…</p>
+      )}
+      {(showDepartments || (showEmployees && canCreateEmployee)) && departmentCatalog?.error && (
+        <p className="hrm-message hrm-message-error" role="alert">{departmentCatalog.error}</p>
+      )}
+      {showDepartments && departmentCatalog?.data && (
+        <DepartmentsPanel
+          key={branchId}
+          branchId={branchId}
+          branchName={branchName ?? 'Chi nhánh của tài khoản'}
+          departments={departments}
+          canManage={departmentCatalog.data.canManage}
+          onSaved={(name) => {
+            setNotice(`Đã lưu phòng ban ${name}.`)
+            setHrRevision((revision) => revision + 1)
+          }}
+        />
+      )}
+      {showEmployees && canCreateEmployee && departmentCatalog?.data && !departments.length && (
+        <p className="hrm-message">
+          Cần có phòng ban để thêm nhân viên.{' '}
+          <button type="button" onClick={() => setView('departments')}>Mở Quản lý phòng ban</button>
+        </p>
+      )}
+      {showEmployees && canCreateEmployee && !draftCatalog && <p className="hrm-message" role="status">Đang tải hồ sơ chờ…</p>}
+      {showEmployees && (draftError || draftCatalog?.error) && (
+        <p className="hrm-message hrm-message-error" role="alert">{draftError || draftCatalog?.error}</p>
+      )}
+      {showEmployees && Boolean(draftCatalog?.data?.length) && (
+        <section className="hrm-panel" aria-labelledby="hrm-pending-title">
+          <header className="hrm-panel-heading">
+            <div>
+              <h2 id="hrm-pending-title">Hồ sơ chờ gán chi nhánh</h2>
+              {branchName && <p>Các hồ sơ này sẽ được gán vào {branchName}.</p>}
+            </div>
+          </header>
+          <div className="hrm-directory-scroll" role="region" aria-label="Bảng hồ sơ chờ" tabIndex={0}>
+            <table className="hrm-directory-table hrm-compact-table">
+              <thead><tr><th scope="col">Mã NV</th><th scope="col">Họ và tên</th><th scope="col">Phòng ban</th><th scope="col">Thao tác</th></tr></thead>
+              <tbody>
+                {draftCatalog?.data?.map((draft) => {
+                  const department = departments.find(({ id }) => id === draft.departmentId)
+                  return (
+                    <tr key={draft.id}>
+                      <td className="hrm-directory-code">{draft.code}</td>
+                      <th scope="row">{draft.name}</th>
+                      <td>{department?.name ?? '—'}</td>
+                      <td><div className="hrm-directory-actions">
+                        <button type="button" disabled={!departments.length || Boolean(attachingDraft)} onClick={() => setEmployeeForm(draft)}>Sửa hồ sơ</button>
+                        <button type="button" disabled={!department || !draft.email || Boolean(attachingDraft)} onClick={() => void attachDraft(draft.id)}>
+                          {attachingDraft === draft.id ? 'Đang gán…' : draft.email ? 'Gán chi nhánh' : 'Cần bổ sung email'}
+                        </button>
+                      </div></td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
       {showEmployees && snapshot && (
         <EmployeeDirectory
           key={branchId}
@@ -456,6 +613,16 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
       )}
       {showShiftManagement && !snapshot && branchPicker && <div className="hrm-shift-branch">{branchPicker}</div>}
       {showShiftManagement && loading && <p className="hrm-message" role="status">Đang tải cấu hình ca làm…</p>}
+      {showEmployees && employeeForm && (
+        <CreateEmployeeDialog
+          branchId={branchId}
+          departments={departments}
+          draft={employeeForm === 'new' ? undefined : employeeForm}
+          onSubmit={addEmployee}
+          onClose={() => setEmployeeForm(null)}
+        />
+      )}
+      {employeeCredentials && <EmployeeCredentialsDialog credentials={employeeCredentials} onClose={() => setEmployeeCredentials(null)} />}
       {dialog && snapshot && (
         <AssignDialog
           branchName={branchName}
