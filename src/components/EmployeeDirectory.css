@@ -1,0 +1,45 @@
+.hrm-directory-filters > select { width: auto; max-width: 100%; font-size: 13px; }
+.hrm-directory-filters .hrm-quick-search { flex: 1 1 245px; }
+.hrm-directory-note { margin: 0; padding: 10px 22px; border-bottom: 1px solid #fde8bd; background: #fffbeb; color: #854d0e; font-size: 13px; }
+
+.hrm-directory-scroll { overflow-x: auto; }
+.hrm-directory-scroll:focus-visible { outline: 2px solid var(--hrm-blue); outline-offset: -2px; }
+.hrm-directory-table { width: 100%; min-width: 745px; border-collapse: collapse; text-align: left; font-size: 13px; }
+.hrm-directory-table thead { background: #eef3f9; color: #475467; }
+.hrm-directory-table :is(th, td) { padding: 10px 16px; border-bottom: 1px solid var(--hrm-line); }
+.hrm-directory-table th { font-weight: 600; }
+.hrm-directory-table tbody tr:hover { background: #f8fafc; }
+.hrm-directory-table tbody tr:last-child > * { border-bottom: 0; }
+.hrm-directory-code { color: #1d4ed8; font-weight: 600; overflow-wrap: anywhere; }
+.hrm-directory-count { font-variant-numeric: tabular-nums; }
+.hrm-directory-table .hrm-directory-empty { padding-block: 24px; color: var(--hrm-muted); text-align: center; }
+
+.hrm-directory-tags, .hrm-directory-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.hrm-directory-tags span { padding: 2px 8px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: 12px; font-weight: 600; }
+.hrm-directory-tags [data-type='cskh'] { background: #ecfdf5; color: #0f766e; }
+.hrm-main .hrm-directory-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border-color: #e4e7ec;
+  font-size: 12px;
+}
+
+.hrm-directory-pagination {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--hrm-line);
+  color: #475467;
+  font-size: 12px;
+}
+
+@media (max-width: 639px) {
+  .hrm-directory-note { padding-inline: 12px; }
+  .hrm-directory-table :is(th, td) { padding-inline: 12px; }
+}

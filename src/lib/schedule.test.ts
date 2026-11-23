@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addDays, buildAssignments, cellAssignments, todayVn, weekDays, weekStart, weekdayLabel } from './schedule.ts'
+import { addDays, buildAssignments, todayVn, weekDays, weekStart, weekdayLabel, workTimeRange } from './schedule.ts'
 import type { WorkAssignment } from '../services/workShifts.ts'
 
 describe('tuần làm việc', () => {
@@ -29,7 +29,9 @@ describe('phân ca', () => {
       buildAssignments({ personIds: ['p1'], dates: ['2026-11-23', '2026-11-24'], shiftId: 's1', employeeType: 'sale', existing }),
     ).toEqual([{ personId: 'p1', date: '2026-11-24', shiftId: 's1', employeeType: 'sale' }])
   })
-  it('chỉ lấy lịch nhân viên của ô, sắp theo tên', () => {
-    expect(cellAssignments(existing, 's1', '2026-11-23').map((item) => item.id)).toEqual(['b', 'a'])
+  it('mở rộng trục giờ cho ca ngoài khung mặc định và ca qua đêm', () => {
+    expect(workTimeRange([])).toEqual({ start: 420, end: 1380 })
+    expect(workTimeRange([{ start: '05:30', end: '23:30' }])).toEqual({ start: 300, end: 1440 })
+    expect(workTimeRange([{ start: '22:00', end: '06:00' }])).toEqual({ start: 0, end: 1440 })
   })
 })

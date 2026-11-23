@@ -30,11 +30,24 @@ const WEEKDAY = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
 export const weekdayLabel = (date: string) => WEEKDAY[parse(date).getUTCDay()]
 export const shortDate = (date: string) => date.slice(8, 10) + '/' + date.slice(5, 7)
 
-/** Lịch nhân viên theo ô (ca × ngày). */
-export function cellAssignments(assignments: WorkAssignment[], shiftId: string, date: string) {
-  return assignments
-    .filter((item) => item.kind === 'employee' && item.shiftId === shiftId && item.date === date)
-    .sort((a, b) => (a.personName || '').localeCompare(b.personName || '', 'vi'))
+export const workSearchText = (value: string) =>
+  value.trim().toLocaleLowerCase('vi').normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/g, 'd')
+
+export const timeToMinutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5))
+
+/** Mặc định hiển thị 07:00–23:00 như CRM, mở rộng khi có ca ngoài khung giờ. */
+export function workTimeRange(items: { start: string; end: string }[]) {
+  const anchor = 7 * 60
+  let start = anchor
+  let end = 23 * 60
+  for (const item of items) {
+    const from = timeToMinutes(item.start)
+    const to = timeToMinutes(item.end)
+    if (to < from) return { start: 0, end: 24 * 60 }
+    start = Math.min(start, anchor + Math.floor((from - anchor) / 120) * 120)
+    end = Math.max(end, anchor + Math.ceil((to - anchor) / 120) * 120)
+  }
+  return { start: Math.max(0, start), end: Math.min(24 * 60, end) }
 }
 
 /**

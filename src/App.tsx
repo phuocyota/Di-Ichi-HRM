@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import LoginPage from './pages/LoginPage.tsx'
-import WorkSchedulePage from './pages/WorkSchedulePage.tsx'
 import { clearSession, getSession, type HrmSession } from './services/session.ts'
+
+const WorkSchedulePage = lazy(() => import('./pages/WorkSchedulePage.tsx'))
 
 export default function App() {
   const [session, setSession] = useState<HrmSession | null>(getSession)
@@ -15,13 +16,15 @@ export default function App() {
 
   if (!session) return <LoginPage onLogin={setSession} />
   return (
-    <WorkSchedulePage
-      key={session.userId}
-      session={session}
-      onLogout={() => {
-        clearSession()
-        setSession(null)
-      }}
-    />
+    <Suspense fallback={<p role="status">Đang mở lịch làm việc…</p>}>
+      <WorkSchedulePage
+        key={session.userId}
+        session={session}
+        onLogout={() => {
+          clearSession()
+          setSession(null)
+        }}
+      />
+    </Suspense>
   )
 }

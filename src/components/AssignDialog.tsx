@@ -1,5 +1,5 @@
-import { useMemo, useState, type FormEvent } from 'react'
-import { buildAssignments, shortDate, weekdayLabel } from '../lib/schedule.ts'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { buildAssignments, shortDate, weekdayLabel, workSearchText } from '../lib/schedule.ts'
 import {
   EMPLOYEE_TYPE_LABEL,
   type AssignItem,
@@ -9,44 +9,51 @@ import {
   type WorkShift,
 } from '../services/workShifts.ts'
 
+export type AssignmentSeed = { shiftId: string; date: string; employee?: WorkEmployee }
+
 type Props = {
+  branchName?: string
   shifts: WorkShift[]
   employees: WorkEmployee[]
   days: string[]
   existing: WorkAssignment[]
-  initial: { shiftId: string; date: string }
+  initial: AssignmentSeed
   onSubmit: (items: AssignItem[]) => Promise<void>
   onClose: () => void
 }
 
 /** Thêm một hoặc nhiều nhân viên vào một ca, trong một hoặc nhiều ngày của tuần. */
-export default function AssignDialog({ shifts, employees, days, existing, initial, onSubmit, onClose }: Props) {
-  const [employeeType, setEmployeeType] = useState<EmployeeType>('cskh')
+export default function AssignDialog({ branchName, shifts, employees, days, existing, initial, onSubmit, onClose }: Props) {
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const [employeeType, setEmployeeType] = useState<EmployeeType>(initial.employee?.employeeTypes[0] ?? 'cskh')
   const [shiftId, setShiftId] = useState(initial.shiftId)
   const [dates, setDates] = useState<string[]>([initial.date])
-  const [personIds, setPersonIds] = useState<string[]>([])
-  const [search, setSearch] = useState('')
+  const [personIds, setPersonIds] = useState<string[]>(initial.employee ? [initial.employee.id] : [])
+  const [search, setSearch] = useState(initial.employee?.code || initial.employee?.name || '')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const candidates = useMemo(() => {
-    const keyword = search.trim().toLocaleLowerCase('vi')
-    return employees.filter(
-      (person) =>
-        person.employeeTypes.includes(employeeType) &&
-        (!keyword || `${person.name} ${person.code}`.toLocaleLowerCase('vi').includes(keyword)),
-    )
-  }, [employees, employeeType, search])
+  useEffect(() => {
+    const dialog = dialogRef.current
+    dialog?.showModal()
+    return () => dialog?.close()
+  }, [])
+
+  const eligible = employees.filter((person) => person.employeeTypes.includes(employeeType))
+  const keyword = workSearchText(search)
+  const candidates = eligible.filter((person) => workSearchText(`${person.name} ${person.code}`).includes(keyword))
+  const chosen = eligible.filter((person) => personIds.includes(person.id)).map((person) => person.id)
 
   const toggle = (list: string[], value: string) =>
     list.includes(value) ? list.filter((item) => item !== value) : [...list, value]
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
+    if (saving) return
     setError('')
-    const chosen = personIds.filter((id) => candidates.some((person) => person.id === id))
     if (!chosen.length) return setError('Chọn ít nhất một nhân viên.')
     if (!dates.length) return setError('Chọn ít nhất một ngày.')
+    if (!shifts.some((shift) => shift.id === shiftId)) return setError('Vui lòng chọn ca làm còn hiệu lực.')
     const items = buildAssignments({ personIds: chosen, dates, shiftId, employeeType, existing })
     if (!items.length) return setError('Các nhân viên đã có lịch ở ca và ngày đã chọn.')
     setSaving(true)
@@ -60,58 +67,84 @@ export default function AssignDialog({ shifts, employees, days, existing, initia
   }
 
   return (
-    <div className="overlay" role="presentation" onClick={onClose}>
-      <form className="card dialog" role="dialog" aria-modal="true" aria-labelledby="assign-title" onSubmit={submit} onClick={(e) => e.stopPropagation()}>
+    <dialog
+      ref={dialogRef}
+      className="assign-dialog"
+      aria-labelledby="assign-title"
+      onCancel={(event) => {
+        event.preventDefault()
+        if (!saving) onClose()
+      }}
+      onClick={(event) => {
+        if (!saving && event.target === event.currentTarget) onClose()
+      }}
+    >
+      <header className="assign-header">
         <h2 id="assign-title">Thêm nhân viên vào ca</h2>
-        <div className="row">
-          <label>
-            Loại nhân viên
-            <select value={employeeType} onChange={(e) => setEmployeeType(e.target.value as EmployeeType)}>
-              {(Object.keys(EMPLOYEE_TYPE_LABEL) as EmployeeType[]).map((type) => (
-                <option key={type} value={type}>{EMPLOYEE_TYPE_LABEL[type]}</option>
+        <button className="assign-close" type="button" aria-label="Đóng" onClick={onClose} disabled={saving}>×</button>
+      </header>
+      <form className="assign-form" onSubmit={submit}>
+        <fieldset className="assign-fields" aria-label="Thông tin phân lịch" disabled={saving}>
+          {branchName && <p className="assign-branch"><strong>Chi nhánh</strong> {branchName}</p>}
+          <fieldset className="assign-days">
+            <legend>Ngày làm việc</legend>
+            <div className="assign-chips">
+              {days.map((date) => (
+                <label key={date}>
+                  <input type="checkbox" checked={dates.includes(date)} onChange={() => setDates(toggle(dates, date))} />
+                  {weekdayLabel(date)} {shortDate(date)}
+                </label>
               ))}
-            </select>
-          </label>
-          <label>
-            Ca làm
-            <select value={shiftId} onChange={(e) => setShiftId(e.target.value)}>
-              {shifts.map((shift) => (
-                <option key={shift.id} value={shift.id}>{shift.name} ({shift.start}–{shift.end})</option>
+            </div>
+          </fieldset>
+          <div className="assign-row">
+            <label>
+              Loại nhân viên
+              <select value={employeeType} onChange={(event) => {
+                setEmployeeType(event.target.value as EmployeeType)
+                setPersonIds([])
+                setSearch('')
+                setError('')
+              }}>
+                {(Object.keys(EMPLOYEE_TYPE_LABEL) as EmployeeType[]).map((type) => (
+                  <option key={type} value={type}>{EMPLOYEE_TYPE_LABEL[type]}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Ca làm theo chi nhánh
+              <select value={shiftId} onChange={(event) => setShiftId(event.target.value)} required>
+                <option value="">Chọn ca làm</option>
+                {shifts.map((shift) => (
+                  <option key={shift.id} value={shift.id}>{shift.name} ({shift.start}–{shift.end})</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <fieldset className="assign-employees">
+            <legend>Nhân viên</legend>
+            <input type="search" aria-label="Tìm nhân viên" placeholder="Tìm theo tên hoặc mã" value={search} onChange={(event) => setSearch(event.target.value)} />
+            <div className="assign-people">
+              {candidates.length === 0 && <p className="assign-empty">Không có nhân viên phù hợp.</p>}
+              {candidates.map((person) => (
+                <label key={person.id}>
+                  <input type="checkbox" checked={personIds.includes(person.id)} onChange={() => setPersonIds(toggle(personIds, person.id))} />
+                  <span>
+                    {person.name}
+                    <small>{[person.code, person.position].filter(Boolean).join(' · ')}</small>
+                  </span>
+                </label>
               ))}
-            </select>
-          </label>
-        </div>
-        <fieldset>
-          <legend>Ngày</legend>
-          <div className="chips">
-            {days.map((date) => (
-              <label key={date} className={dates.includes(date) ? 'chip active' : 'chip'}>
-                <input type="checkbox" checked={dates.includes(date)} onChange={() => setDates(toggle(dates, date))} />
-                {weekdayLabel(date)} {shortDate(date)}
-              </label>
-            ))}
-          </div>
+            </div>
+            <p className="assign-count" aria-live="polite">Đã chọn {chosen.length} nhân viên</p>
+          </fieldset>
         </fieldset>
-        <fieldset>
-          <legend>Nhân viên ({EMPLOYEE_TYPE_LABEL[employeeType]})</legend>
-          <input type="search" placeholder="Tìm theo tên hoặc mã" value={search} onChange={(e) => setSearch(e.target.value)} />
-          <div className="people">
-            {candidates.length === 0 && <p className="muted">Không có nhân viên phù hợp.</p>}
-            {candidates.map((person) => (
-              <label key={person.id} className="person">
-                <input type="checkbox" checked={personIds.includes(person.id)} onChange={() => setPersonIds(toggle(personIds, person.id))} />
-                <span>{person.name}</span>
-                <small className="muted">{[person.code, person.position].filter(Boolean).join(' · ')}</small>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        {error && <p className="error" role="alert">{error}</p>}
-        <div className="actions">
+        {error && <p className="assign-error" role="alert">{error}</p>}
+        <footer className="assign-actions">
           <button type="button" onClick={onClose} disabled={saving}>Hủy</button>
-          <button className="primary" type="submit" disabled={saving}>{saving ? 'Đang lưu…' : 'Phân lịch'}</button>
-        </div>
+          <button className="assign-save" type="submit" disabled={saving}>{saving ? 'Đang lưu…' : 'Lưu phân lịch'}</button>
+        </footer>
       </form>
-    </div>
+    </dialog>
   )
 }

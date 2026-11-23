@@ -23,6 +23,7 @@ export type WorkPreference = { personId: string; branchId: string; date: string;
 export type WorkSnapshot = {
   branchId: string
   revision: number
+  saved?: boolean
   shifts: WorkShift[]
   roster: { assignments: WorkAssignment[]; preferences: WorkPreference[]; attendance: unknown[] }
   canAssign?: boolean
@@ -62,6 +63,23 @@ export const getBranches = () =>
 const base = (branchId: string) => `/work-shifts/branches/${encodeURIComponent(branchId)}`
 
 export const getSnapshot = (branchId: string) => request<WorkSnapshot>('GET', base(branchId))
+
+export type BranchWorkOverview = { branch: WorkBranch; snapshot: WorkSnapshot }
+
+export async function getWorkOverview(): Promise<BranchWorkOverview[]> {
+  const { branches } = await getBranches()
+  const results = await Promise.allSettled(branches.map(async (branch) => {
+    const snapshot = await getSnapshot(branch.id)
+    if (snapshot.branchId !== branch.id) throw new Error('Chi nhánh trả về không khớp yêu cầu.')
+    return { branch, snapshot }
+  }))
+  const unavailable = results.flatMap((result, index) => result.status === 'rejected' ? [branches[index].name] : [])
+  if (unavailable.length) throw new Error(`Không tải được dữ liệu của ${unavailable.join(', ')}. Vui lòng thử lại để xem tổng đầy đủ.`)
+  return results.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
+}
+
+export const configureWorkShifts = (branchId: string, revision: number, shifts: WorkShift[]) =>
+  request<WorkSnapshot>('PUT', base(branchId), { revision, shifts })
 
 export const getEmployees = (branchId: string) =>
   request<{ employees: WorkEmployee[]; unclassified: number }>('GET', `${base(branchId)}/employees`)
