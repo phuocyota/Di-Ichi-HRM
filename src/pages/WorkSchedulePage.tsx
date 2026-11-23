@@ -544,6 +544,12 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
           </div>
         </section>
       )}
+      {showEmployees && snapshot && canAssign && !loading && !defaultShift && (
+        <p className="hrm-message">
+          Chi nhánh chưa có ca làm.{' '}
+          <button type="button" onClick={() => setView('shifts')}>Cấu hình ca làm</button>
+        </p>
+      )}
       {showEmployees && snapshot && (
         <EmployeeDirectory
           key={branchId}
@@ -554,9 +560,10 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
           onViewSchedule={openWeek}
           onEdit={(employee) => setEmployeeForm({ kind: 'edit', employee })}
           editDisabled={!departmentCatalog?.data || Boolean(attachingDraft)}
-          onAssign={canAssign && !loading && !savingShifts && defaultShift
-            ? (employee) => openAssignment(defaultShift.id, today, employee)
+          onAssign={canAssign
+            ? (employee) => { if (defaultShift) openAssignment(defaultShift.id, today, employee) }
             : undefined}
+          assignDisabled={loading || savingShifts || !defaultShift}
         />
       )}
       {showCalendar && unclassified > 0 && (

@@ -13,11 +13,12 @@ type Props = {
   onEdit: (employee: WorkEmployee) => void
   editDisabled?: boolean
   onAssign?: (employee: WorkEmployee) => void
+  assignDisabled?: boolean
 }
 
 const PAGE_SIZE = 15
 
-export default function EmployeeDirectory({ today, employees, assignments, unclassified, onViewSchedule, onEdit, editDisabled, onAssign }: Props) {
+export default function EmployeeDirectory({ today, employees, assignments, unclassified, onViewSchedule, onEdit, editDisabled, onAssign, assignDisabled }: Props) {
   const [search, setSearch] = useState('')
   const [type, setType] = useState<EmployeeType | ''>('')
   const [page, setPage] = useState(1)
@@ -101,16 +102,16 @@ export default function EmployeeDirectory({ today, employees, assignments, uncla
                 <td className="hrm-directory-count">{weekCounts.get(employee.id) ?? 0}</td>
                 <td>
                   <div className="hrm-directory-actions">
-                    {employee.editProfile && (
-                      <button type="button" aria-label={`Sửa hồ sơ của ${employee.name}`} disabled={editDisabled} onClick={() => onEdit(employee)}>Sửa</button>
-                    )}
                     <button type="button" aria-label={`Xem lịch của ${employee.name}`} onClick={() => onViewSchedule(employee)}>
                       <CalendarDays size={15} aria-hidden="true" /> Xem lịch
                     </button>
                     {onAssign && (
-                      <button type="button" aria-label={`Phân ca cho ${employee.name}`} onClick={() => onAssign(employee)}>
+                      <button type="button" aria-label={`Phân ca cho ${employee.name}`} disabled={assignDisabled} onClick={() => onAssign(employee)}>
                         <UserPlus size={15} aria-hidden="true" /> Phân ca
                       </button>
+                    )}
+                    {employee.editProfile && (
+                      <button type="button" aria-label={`Sửa hồ sơ của ${employee.name}`} disabled={editDisabled} onClick={() => onEdit(employee)}>Sửa</button>
                     )}
                   </div>
                 </td>
