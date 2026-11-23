@@ -36,6 +36,12 @@ export type WorkEmployee = {
   position: string
   department?: string
   employeeTypes: EmployeeType[]
+  editProfile?: {
+    departmentId: string | null
+    phone: string | null
+    email: string | null
+    hasAccount: boolean
+  }
 }
 
 export type AssignItem = { personId: string; date: string; shiftId: string; employeeType: EmployeeType }
@@ -105,6 +111,9 @@ export const getEmployees = (branchId: string) =>
 
 export const createWorkEmployee = (branchId: string, employee: NewWorkEmployee) =>
   request<CreatedWorkEmployee>('POST', `${base(branchId)}/employees`, employee)
+
+export const updateWorkEmployee = (branchId: string, id: string, employee: Omit<NewWorkEmployee, 'email'> & { email?: string }) =>
+  request<Pick<WorkEmployee, 'id' | 'code' | 'name'>>('PATCH', `${base(branchId)}/employees/${encodeURIComponent(id)}`, employee)
 
 export const getWorkDepartments = (branchId: string) =>
   request<{ departments: WorkDepartment[]; canManage: boolean }>('GET', `${base(branchId)}/departments`)

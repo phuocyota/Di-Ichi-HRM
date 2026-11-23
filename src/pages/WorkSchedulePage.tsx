@@ -26,6 +26,7 @@ import {
   getWorkOverview,
   removeAssignment,
   saveWorkEmployeeDraft,
+  updateWorkEmployee,
   type AssignItem,
   type BranchWorkOverview,
   type NewWorkEmployee,
@@ -39,6 +40,10 @@ import {
 import './WorkSchedulePage.css'
 
 const CONFLICT = 'Lịch vừa được cập nhật ở nơi khác, đã tải lại dữ liệu mới. Vui lòng thao tác lại.'
+type EmployeeForm =
+  | { kind: 'create' }
+  | { kind: 'draft'; draft: WorkEmployeeDraft }
+  | { kind: 'edit'; employee: WorkEmployee }
 const pageTitles: Record<HrmView, string> = {
   overview: 'Tổng quan',
   employees: 'Quản lý nhân viên',
@@ -96,7 +101,7 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
   const [snapshot, setSnapshot] = useState<WorkSnapshot | null>(null)
   const [canAssign, setCanAssign] = useState(false)
   const [canCreateEmployee, setCanCreateEmployee] = useState(false)
-  const [employeeForm, setEmployeeForm] = useState<WorkEmployeeDraft | 'new' | null>(null)
+  const [employeeForm, setEmployeeForm] = useState<EmployeeForm | null>(null)
   const [employeeCredentials, setEmployeeCredentials] = useState<WorkEmployeeCredentials | null>(null)
   const [attachingDraft, setAttachingDraft] = useState<string | null>(null)
   const [draftError, setDraftError] = useState('')
@@ -248,7 +253,7 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
   }, [load, showDepartments, showOverview])
 
   const addEmployee = async (employee: NewWorkEmployee, targetBranch?: WorkBranch) => {
-    const draftId = employeeForm && employeeForm !== 'new' ? employeeForm.id : undefined
+    const draftId = employeeForm?.kind === 'draft' ? employeeForm.draft.id : undefined
     const saved = targetBranch
       ? await createWorkEmployee(targetBranch.id, employee)
       : await saveWorkEmployeeDraft(branchId, employee, draftId)
@@ -260,6 +265,18 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
       : `Đã lưu hồ sơ chờ của ${saved.name} (${saved.code}).`)
     setHrRevision((revision) => revision + 1)
     if (targetBranch?.id === branchId) void load()
+  }
+
+  const editEmployee = async (employee: NewWorkEmployee) => {
+    if (employeeForm?.kind !== 'edit') return
+    const saved = await updateWorkEmployee(branchId, employeeForm.employee.id, {
+      ...employee,
+      email: employee.email || undefined,
+    })
+    if (latestBranch.current !== branchId) return
+    setEmployeeForm(null)
+    setNotice(`Đã cập nhật hồ sơ ${saved.name} (${saved.code}).`)
+    void load()
   }
 
   const attachDraft = async (id: string) => {
@@ -435,7 +452,7 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
               {(showOverview ? !overview : refreshing) ? 'Đang tải…' : 'Tải lại'}
             </button>
             {showEmployees && canCreateEmployee && (
-              <button type="button" className="hrm-add" onClick={() => setEmployeeForm('new')} disabled={loading || !departments.length || Boolean(attachingDraft)}>
+              <button type="button" className="hrm-add" onClick={() => setEmployeeForm({ kind: 'create' })} disabled={loading || !departments.length || Boolean(attachingDraft)}>
                 <UserPlus size={16} aria-hidden="true" />
                 Thêm nhân viên
               </button>
@@ -514,7 +531,7 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
                       <th scope="row">{draft.name}</th>
                       <td>{department?.name ?? '—'}</td>
                       <td><div className="hrm-directory-actions">
-                        <button type="button" disabled={!departments.length || Boolean(attachingDraft)} onClick={() => setEmployeeForm(draft)}>Sửa hồ sơ</button>
+                        <button type="button" disabled={!departments.length || Boolean(attachingDraft)} onClick={() => setEmployeeForm({ kind: 'draft', draft })}>Sửa hồ sơ</button>
                         <button type="button" disabled={!department || !draft.email || Boolean(attachingDraft)} onClick={() => void attachDraft(draft.id)}>
                           {attachingDraft === draft.id ? 'Đang gán…' : draft.email ? 'Gán chi nhánh' : 'Cần bổ sung email'}
                         </button>
@@ -535,6 +552,8 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
           assignments={assignments}
           unclassified={unclassified}
           onViewSchedule={openWeek}
+          onEdit={(employee) => setEmployeeForm({ kind: 'edit', employee })}
+          editDisabled={!departmentCatalog?.data || Boolean(attachingDraft)}
           onAssign={canAssign && !loading && !savingShifts && defaultShift
             ? (employee) => openAssignment(defaultShift.id, today, employee)
             : undefined}
@@ -617,8 +636,9 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
         <CreateEmployeeDialog
           branchId={branchId}
           departments={departments}
-          draft={employeeForm === 'new' ? undefined : employeeForm}
-          onSubmit={addEmployee}
+          draft={employeeForm.kind === 'draft' ? employeeForm.draft : undefined}
+          employee={employeeForm.kind === 'edit' ? employeeForm.employee : undefined}
+          onSubmit={employeeForm.kind === 'edit' ? editEmployee : addEmployee}
           onClose={() => setEmployeeForm(null)}
         />
       )}
