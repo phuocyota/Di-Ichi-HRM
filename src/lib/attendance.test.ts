@@ -49,7 +49,7 @@ describe('trạng thái chấm công', () => {
     expect(row.endsAt - row.startsAt).toBe(4 * 3600_000)
   })
 
-  it('lọc theo chi nhánh, khoảng ngày và loại nhân viên; mới nhất lên trước', () => {
+  it('lọc theo chi nhánh và khoảng ngày, gồm mọi loại ca; mới nhất lên trước', () => {
     const items = [
       shift({ id: 'a1', date: '2026-11-24' }),
       shift({ id: 'a2', date: '2026-11-25' }),
@@ -58,11 +58,12 @@ describe('trạng thái chấm công', () => {
       shift({ id: 'a5', date: '2026-11-20' }),
     ]
     const rows = attendanceRows(items, [{ ...record(iso('08:00')), assignmentId: 'a2' }], {
-      branchId: 'b1', fromDate: '2026-11-24', toDate: '2026-11-25', employeeType: 'sale',
+      branchId: 'b1', fromDate: '2026-11-24', toDate: '2026-11-25',
     }, at('09:00'))
-    expect(rows.map((row) => row.assignment.id)).toEqual(['a2', 'a1'])
-    expect(rows[0].record?.assignmentId).toBe('a2')
-    expect(rows[1].record).toBeNull()
+    expect(rows.map((row) => row.assignment.id).sort()).toEqual(['a1', 'a2', 'a3'])
+    expect(rows.at(-1)?.assignment.id).toBe('a1')
+    expect(rows.find((row) => row.assignment.id === 'a2')?.record?.assignmentId).toBe('a2')
+    expect(rows.find((row) => row.assignment.id === 'a3')?.record).toBeNull()
   })
 
   it('hiển thị giờ theo múi giờ Việt Nam', () => {

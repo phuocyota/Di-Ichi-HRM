@@ -8,9 +8,7 @@ import {
 } from '../lib/attendance.ts'
 import { addDays, todayVn, weekStart, weekdayLabel, workSearchText } from '../lib/schedule.ts'
 import {
-  EMPLOYEE_TYPE_LABEL,
   getAttendancePhoto,
-  type EmployeeType,
   type WorkEmployee,
   type WorkSnapshot,
 } from '../services/workShifts.ts'
@@ -27,12 +25,11 @@ type Props = {
 const dateLabel = (date: string) => date.split('-').reverse().join('/')
 const minutes = (value: number) => (value >= 60 ? `${Math.floor(value / 60)} giờ ${value % 60} phút` : `${value} phút`)
 
-/** Bảng check-in / check-out theo ca của một cơ sở; mặc định xem nhân viên Sale hôm nay. */
+/** Bảng check-in / check-out theo ca của mọi nhân viên trong một cơ sở, mặc định hôm nay. */
 export default function AttendanceBoard({ branchId, branchName, snapshot, employees, branchPicker }: Props) {
   const today = todayVn()
   const [fromDate, setFromDate] = useState(today)
   const [toDate, setToDate] = useState(today)
-  const [employeeType, setEmployeeType] = useState<EmployeeType | ''>('sale')
   const [search, setSearch] = useState('')
   const [now, setNow] = useState(() => Date.now())
   const [photo, setPhoto] = useState<{ row: AttendanceRow; url?: string; error?: string } | null>(null)
@@ -50,14 +47,13 @@ export default function AttendanceBoard({ branchId, branchName, snapshot, employ
     branchId,
     fromDate: fromDate <= toDate ? fromDate : toDate,
     toDate: fromDate <= toDate ? toDate : fromDate,
-    employeeType,
     matchesPerson: query
       ? (personId) => {
           const person = peopleById.get(personId)
           return workSearchText(`${person?.name || ''} ${person?.code || ''}`).includes(query)
         }
       : undefined,
-  }, now), [branchId, employeeType, fromDate, now, peopleById, query, snapshot, toDate])
+  }, now), [branchId, fromDate, now, peopleById, query, snapshot, toDate])
 
   const count = (...statuses: AttendanceRow['status'][]) => rows.filter((row) => statuses.includes(row.status)).length
   const checkedIn = rows.filter((row) => row.record?.checkIn).length
@@ -146,14 +142,6 @@ export default function AttendanceBoard({ branchId, branchName, snapshot, employ
             Đến ngày
             <input type="date" value={toDate} min={fromDate} onChange={(event) => event.target.value && setToDate(event.target.value)} />
           </label>
-          <label className="hrm-people-field">
-            Loại nhân viên
-            <select value={employeeType} onChange={(event) => setEmployeeType(event.target.value as EmployeeType | '')}>
-              <option value="sale">{EMPLOYEE_TYPE_LABEL.sale}</option>
-              <option value="cskh">{EMPLOYEE_TYPE_LABEL.cskh}</option>
-              <option value="">Tất cả</option>
-            </select>
-          </label>
           <div className="hrm-attendance-quick" role="group" aria-label="Chọn nhanh khoảng ngày">
             <button type="button" onClick={() => setRange(today, today)}>Hôm nay</button>
             <button type="button" onClick={() => setRange(addDays(today, -1), addDays(today, -1))}>Hôm qua</button>
@@ -167,7 +155,6 @@ export default function AttendanceBoard({ branchId, branchName, snapshot, employ
               <tr>
                 <th scope="col">Ngày</th>
                 <th scope="col">Nhân viên</th>
-                <th scope="col">Loại</th>
                 <th scope="col">Ca</th>
                 <th scope="col">Check-in</th>
                 <th scope="col">Check-out</th>
@@ -188,7 +175,6 @@ export default function AttendanceBoard({ branchId, branchName, snapshot, employ
                         {person?.code && <small>{person.code}</small>}
                       </span>
                     </th>
-                    <td>{assignment.employeeType ? EMPLOYEE_TYPE_LABEL[assignment.employeeType] : '—'}</td>
                     <td className="hrm-attendance-time">{assignment.start}–{assignment.end}</td>
                     <td className="hrm-attendance-time">
                       {record?.checkIn ? formatVnClock(record.checkIn) : '—'}
@@ -212,7 +198,7 @@ export default function AttendanceBoard({ branchId, branchName, snapshot, employ
               })}
               {!rows.length && (
                 <tr>
-                  <td colSpan={8} className="hrm-directory-empty">
+                  <td colSpan={7} className="hrm-directory-empty">
                     {query ? 'Không tìm thấy nhân viên phù hợp.' : 'Không có ca làm nào trong khoảng ngày đã chọn.'}
                   </td>
                 </tr>

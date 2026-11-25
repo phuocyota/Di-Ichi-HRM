@@ -1,4 +1,4 @@
-import type { EmployeeType, WorkAssignment, WorkAttendance } from '../services/workShifts.ts'
+import type { WorkAssignment, WorkAttendance } from '../services/workShifts.ts'
 
 export type AttendanceStatus =
   | 'upcoming'
@@ -67,12 +67,11 @@ export type AttendanceFilter = {
   branchId: string
   fromDate: string
   toDate: string
-  employeeType: EmployeeType | ''
   /** Trả true nếu nhân viên khớp ô tìm kiếm. */
   matchesPerson?: (personId: string) => boolean
 }
 
-/** Ca của nhân viên trong khoảng ngày kèm bản ghi chấm công, mới nhất lên trước. */
+/** Ca của nhân viên (mọi loại ca) trong khoảng ngày kèm bản ghi chấm công, mới nhất lên trước. */
 export function attendanceRows(
   assignments: WorkAssignment[],
   attendance: WorkAttendance[],
@@ -86,7 +85,6 @@ export function attendanceRows(
       item.branchId === filter.branchId &&
       item.date >= filter.fromDate &&
       item.date <= filter.toDate &&
-      (!filter.employeeType || item.employeeType === filter.employeeType) &&
       (!filter.matchesPerson || filter.matchesPerson(item.personId)))
     .map((item) => attendanceRow(item, records.get(item.id) ?? null, now))
     .sort((a, b) => b.startsAt - a.startsAt)
