@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Building2, CalendarDays, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Search, Users, X } from 'lucide-react'
+import { Building2, CalendarDays, GraduationCap, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Presentation, Search, Users, X } from 'lucide-react'
 import diIchiLogo from '../assets/logo/LOGO_Diichi.webp'
 import './HrmLayout.css'
 
-export type HrmView = 'overview' | 'employees' | 'departments' | 'calendar' | 'shifts'
+export type HrmView = 'overview' | 'employees' | 'departments' | 'students' | 'teachers' | 'calendar' | 'shifts'
 type Props = {
   fullName: string
   accountScope?: string
@@ -73,6 +73,14 @@ export default function HrmLayout({
       <button type="button" title="Quản lý phòng ban" aria-current={view === 'departments' ? 'page' : undefined} onClick={() => navigate('departments')}>
         <Building2 className="hrm-nav-icon" aria-hidden="true" />
         <span>Quản lý phòng ban</span>
+      </button>
+      <button type="button" title="Danh sách học viên" aria-current={view === 'students' ? 'page' : undefined} onClick={() => navigate('students')}>
+        <GraduationCap className="hrm-nav-icon" aria-hidden="true" />
+        <span>Danh sách học viên</span>
+      </button>
+      <button type="button" title="Danh sách giáo viên" aria-current={view === 'teachers' ? 'page' : undefined} onClick={() => navigate('teachers')}>
+        <Presentation className="hrm-nav-icon" aria-hidden="true" />
+        <span>Danh sách giáo viên</span>
       </button>
       <button type="button" title="Lịch làm việc" aria-current={view === 'calendar' || view === 'shifts' ? 'page' : undefined} onClick={() => navigate('calendar')}>
         <CalendarDays className="hrm-nav-icon" aria-hidden="true" />
