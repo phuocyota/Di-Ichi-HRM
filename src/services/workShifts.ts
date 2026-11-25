@@ -1,4 +1,4 @@
-import { request } from './api.ts'
+import { request, requestBlob } from './api.ts'
 import { SUPER_HRM, type HrmSession } from './session.ts'
 
 export type EmployeeType = 'cskh' | 'sale'
@@ -20,12 +20,22 @@ export type WorkAssignment = {
 
 export type WorkPreference = { personId: string; branchId: string; date: string; shiftId: string }
 
+/** Bản ghi chấm công của một ca (`assignmentId`); `self`: nhân viên tự check-in/out, `admin`: quản trị viên chấm. */
+export type WorkAttendance = {
+  assignmentId: string
+  checkIn?: string | null
+  checkOut?: string | null
+  source: 'self' | 'admin' | string
+  note?: string
+  checkInPhotoId?: string | null
+}
+
 export type WorkSnapshot = {
   branchId: string
   revision: number
   saved?: boolean
   shifts: WorkShift[]
-  roster: { assignments: WorkAssignment[]; preferences: WorkPreference[]; attendance: unknown[] }
+  roster: { assignments: WorkAssignment[]; preferences: WorkPreference[]; attendance: WorkAttendance[] }
   canAssign?: boolean
 }
 
@@ -148,3 +158,7 @@ export const removeAssignment = (branchId: string, assignmentId: string, revisio
     'DELETE',
     `${base(branchId)}/assignments/${encodeURIComponent(assignmentId)}?revision=${revision}`,
   )
+
+/** Ảnh nhân viên chụp khi tự check-in (cần quyền xem lịch của cơ sở). */
+export const getAttendancePhoto = (branchId: string, fileId: string) =>
+  requestBlob(`${base(branchId)}/attendance-photos/${encodeURIComponent(fileId)}`)

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CalendarDays, CalendarOff, ChevronRight, RefreshCw, UserPlus, Users } from 'lucide-react'
 import AssignDialog, { type AssignmentSeed } from '../components/AssignDialog.tsx'
+import AttendanceBoard from '../components/AttendanceBoard.tsx'
 import CreateEmployeeDialog from '../components/CreateEmployeeDialog.tsx'
 import DepartmentsPanel from '../components/DepartmentsPanel.tsx'
 import EmployeeDirectory from '../components/EmployeeDirectory.tsx'
@@ -53,6 +54,7 @@ const pageTitles: Record<HrmView, string> = {
   teachers: 'Danh sách giáo viên',
   calendar: 'Phân lịch làm việc',
   shifts: 'Quản lý ca làm',
+  attendance: 'Chấm công',
 }
 type OverviewLoad = { request: number; results: BranchWorkOverview[]; error: string }
 type BranchResult<T> = { branchId: string; revision: number } & ({ data: T; error?: undefined } | { data?: undefined; error: string })
@@ -403,6 +405,7 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
   const defaultShift = shifts[0]
   const showCalendar = view === 'calendar'
   const showShiftManagement = view === 'shifts'
+  const showAttendance = view === 'attendance'
   const pageTitle = pageTitles[view]
   const description = {
     overview: 'Tổng hợp ca làm và ngày nghỉ từ tất cả chi nhánh được phép xem.',
@@ -412,6 +415,7 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
     teachers: branchName ? `Tra cứu giáo viên tại ${branchName}.` : 'Tra cứu giáo viên theo chi nhánh.',
     calendar: 'Quản lý lịch làm việc của nhân viên CSKH và Sale theo chi nhánh.',
     shifts: 'Thiết lập ca sáng, ca tối và các ca bổ sung theo chi nhánh.',
+    attendance: branchName ? `Giờ check-in và check-out của nhân viên tại ${branchName}.` : 'Giờ check-in và check-out của nhân viên theo chi nhánh.',
   }[view]
   const refreshing = directoryKind ? !branchId && !error : showDepartments ? !departmentCatalog : loading
   const branchPicker = allBranches && branches.length > 0 && (
@@ -658,6 +662,18 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
         </div>
       )}
       {showShiftManagement && !snapshot && branchPicker && <div className="hrm-shift-branch">{branchPicker}</div>}
+      {showAttendance && !snapshot && branchPicker && <div className="hrm-shift-branch">{branchPicker}</div>}
+      {showAttendance && loading && <p className="hrm-message" role="status">Đang tải dữ liệu chấm công…</p>}
+      {showAttendance && snapshot && (
+        <AttendanceBoard
+          key={snapshot.branchId}
+          branchId={branchId}
+          branchName={branchName}
+          snapshot={snapshot}
+          employees={employees}
+          branchPicker={branchPicker}
+        />
+      )}
       {showShiftManagement && loading && <p className="hrm-message" role="status">Đang tải cấu hình ca làm…</p>}
       {showEmployees && employeeForm && (
         <CreateEmployeeDialog

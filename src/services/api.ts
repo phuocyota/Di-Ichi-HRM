@@ -45,3 +45,23 @@ export async function request<T>(method: string, path: string, body?: unknown): 
   }
   return (payload && 'data' in payload ? payload.data : payload) as T
 }
+
+/** Tải file nhị phân (ảnh) kèm Bearer token; lỗi được chuẩn hóa như `request`. */
+export async function requestBlob(path: string): Promise<Blob> {
+  const token = getSession()?.accessToken
+  let response: Response
+  try {
+    response = await fetch(BASE_URL + path, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  } catch {
+    throw new ApiError(0, 'Không kết nối được máy chủ. Vui lòng thử lại.')
+  }
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as Envelope<unknown> | null
+    if (response.status === 401 && token) {
+      clearSession()
+      window.dispatchEvent(new Event('hrm:logout'))
+    }
+    throw new ApiError(response.status, messageOf(payload, `Yêu cầu thất bại (${response.status}).`))
+  }
+  return response.blob()
+}

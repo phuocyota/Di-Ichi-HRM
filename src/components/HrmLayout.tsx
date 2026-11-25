@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Building2, CalendarDays, GraduationCap, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Presentation, Search, Users, X } from 'lucide-react'
+import { Building2, CalendarDays, Fingerprint, GraduationCap, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Presentation, Search, Users, X } from 'lucide-react'
 import diIchiLogo from '../assets/logo/LOGO_Diichi.webp'
 import './HrmLayout.css'
 
-export type HrmView = 'overview' | 'employees' | 'departments' | 'students' | 'teachers' | 'calendar' | 'shifts'
+export type HrmView = 'overview' | 'employees' | 'departments' | 'students' | 'teachers' | 'calendar' | 'shifts' | 'attendance'
 type Props = {
   fullName: string
   accountScope?: string
@@ -85,6 +85,10 @@ export default function HrmLayout({
       <button type="button" title="Lịch làm việc" aria-current={view === 'calendar' || view === 'shifts' ? 'page' : undefined} onClick={() => navigate('calendar')}>
         <CalendarDays className="hrm-nav-icon" aria-hidden="true" />
         <span>Lịch làm việc</span>
+      </button>
+      <button type="button" title="Chấm công" aria-current={view === 'attendance' ? 'page' : undefined} onClick={() => navigate('attendance')}>
+        <Fingerprint className="hrm-nav-icon" aria-hidden="true" />
+        <span>Chấm công</span>
       </button>
     </nav>
     <div className="hrm-nav-footer">

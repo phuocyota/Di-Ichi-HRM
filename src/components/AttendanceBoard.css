@@ -1,0 +1,49 @@
+.hrm-attendance-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.hrm-stats > [data-tone='rose'] { --stat-fg: #b91c1c; --stat-bg: #fef2f2; }
+
+.hrm-attendance-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 12px 22px 16px;
+  border-top: 1px solid var(--hrm-line);
+  background: #f8fafc;
+}
+.hrm-attendance-filters .hrm-people-field:first-child { flex: 1 1 220px; max-width: 320px; }
+.hrm-attendance-filters input[type='date'] { min-height: 38px; }
+.hrm-attendance-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.hrm-attendance-quick button { min-height: 38px; }
+
+.hrm-directory-table.hrm-attendance-table { min-width: 880px; }
+.hrm-attendance-table :is(th, td) { padding: 10px 14px; vertical-align: top; }
+.hrm-attendance-person, .hrm-attendance-time { display: grid; gap: 2px; }
+.hrm-attendance-time { font-variant-numeric: tabular-nums; }
+.hrm-attendance-person small { color: #667085; font-weight: 500; }
+.hrm-attendance-warn { color: #b45309; font-size: 12px; font-weight: 600; }
+.hrm-attendance-source { display: block; margin-top: 4px; color: #667085; font-size: 12px; }
+
+.hrm-attendance-status {
+  display: inline-block;
+  padding: 3px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.hrm-attendance-status:is([data-status='on-time'], [data-status='done']) { border-color: #a7f3d0; background: #ecfdf5; color: #047857; }
+.hrm-attendance-status:is([data-status='late'], [data-status='early'], [data-status='missing-checkout']) { border-color: #fde68a; background: #fffbeb; color: #92400e; }
+.hrm-attendance-status[data-status='absent'] { border-color: #fecaca; background: #fef2f2; color: #b91c1c; }
+.hrm-attendance-status[data-status='waiting'] { border-color: #bfdbfe; background: #eff6ff; color: #1d4ed8; }
+
+.hrm-attendance-photo { display: inline-flex; align-items: center; gap: 4px; }
+.hrm-attendance-photo-dialog { width: min(560px, calc(100vw - 32px)); }
+.hrm-attendance-photo-dialog img { display: block; width: 100%; max-height: 70vh; object-fit: contain; border-radius: 8px; background: #f1f5f9; }
+
+@media (max-width: 720px) {
+  .hrm-attendance-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hrm-attendance-filters { padding-inline: 12px; }
+}
