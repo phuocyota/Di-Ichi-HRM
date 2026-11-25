@@ -431,6 +431,9 @@ export default function WorkSchedulePage({ session, onLogout }: { session: HrmSe
       view={view}
       onViewChange={(next) => {
         if (next === 'overview') refreshOverview()
+        // Effect tải dữ liệu chỉ chạy khi rời Tổng quan/Phòng ban/Danh sách; từ Lịch, Nhân viên, Ca làm
+        // sang Chấm công thì snapshot cũ được giữ nên phải tự tải lại để thấy check-in mới.
+        if (next === 'attendance' && view !== 'attendance' && !showOverview && !showDepartments && !directoryKind) void load()
         setNotice('')
         setDraftError('')
         setView(next)
