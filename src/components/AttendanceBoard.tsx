@@ -8,7 +8,9 @@ import {
 } from '../lib/attendance.ts'
 import { addDays, todayVn, weekStart, weekdayLabel, workSearchText } from '../lib/schedule.ts'
 import {
+  getAttendanceChecks,
   getAttendancePhoto,
+  type AttendanceCheck,
   type WorkEmployee,
   type WorkSnapshot,
 } from '../services/workShifts.ts'
@@ -23,6 +25,11 @@ type Props = {
 }
 
 const dateLabel = (date: string) => date.split('-').reverse().join('/')
+/** API lịch sử check giới hạn 62 ngày; khoảng dài hơn thì không tải ảnh check-out. */
+const MAX_CHECK_RANGE_DAYS = 62
+const dayCount = (from: string, to: string) => (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000 + 1
+type PhotoKind = 'check-in' | 'check-out'
+const PHOTO_LABEL: Record<PhotoKind, string> = { 'check-in': 'Check-in', 'check-out': 'Check-out' }
 const minutes = (value: number) => (value >= 60 ? `${Math.floor(value / 60)} giờ ${value % 60} phút` : `${value} phút`)
 
 /** Bảng check-in / check-out theo ca của mọi nhân viên trong một cơ sở, mặc định hôm nay. */
@@ -32,7 +39,9 @@ export default function AttendanceBoard({ branchId, branchName, snapshot, employ
   const [toDate, setToDate] = useState(today)
   const [search, setSearch] = useState('')
   const [now, setNow] = useState(() => Date.now())
-  const [photo, setPhoto] = useState<{ row: AttendanceRow; url?: string; error?: string } | null>(null)
+  const [photo, setPhoto] = useState<{ row: AttendanceRow; kind: PhotoKind; url?: string; error?: string } | null>(null)
+  // Ảnh check-out chỉ có trong lịch sử check (roster chỉ giữ ảnh check-in).
+  const [checks, setChecks] = useState<AttendanceCheck[]>([])
   const photoDialog = useRef<HTMLDialogElement>(null)
 
   // Trạng thái "Chưa check-in"/"Vắng" phụ thuộc giờ hiện tại nên cập nhật mỗi phút.
@@ -55,6 +64,30 @@ export default function AttendanceBoard({ branchId, branchName, snapshot, employ
       : undefined,
   }, now), [branchId, fromDate, now, peopleById, query, snapshot, toDate])
 
+  const rangeFrom = fromDate <= toDate ? fromDate : toDate
+  const rangeTo = fromDate <= toDate ? toDate : fromDate
+  useEffect(() => {
+    if (dayCount(rangeFrom, rangeTo) > MAX_CHECK_RANGE_DAYS) {
+      setChecks([])
+      return
+    }
+    let active = true
+    getAttendanceChecks(branchId, rangeFrom, rangeTo)
+      .then((result) => { if (active) setChecks(result.checks) })
+      .catch(() => { if (active) setChecks([]) })
+    return () => { active = false }
+    // Tải lại khi roster đổi (nhân viên vừa check-in/out).
+  }, [branchId, rangeFrom, rangeTo, snapshot.revision])
+
+  // Ảnh check-out mới nhất của mỗi ca (danh sách mới nhất trước).
+  const checkOutPhotos = useMemo(() => {
+    const photos = new Map<string, string>()
+    for (const check of checks) {
+      if (check.type === 'check-out' && check.photoId && !photos.has(check.assignmentId)) photos.set(check.assignmentId, check.photoId)
+    }
+    return photos
+  }, [checks])
+
   const count = (...statuses: AttendanceRow['status'][]) => rows.filter((row) => statuses.includes(row.status)).length
   const checkedIn = rows.filter((row) => row.record?.checkIn).length
   const late = rows.filter((row) => row.lateMinutes > 0).length
@@ -70,23 +103,26 @@ export default function AttendanceBoard({ branchId, branchName, snapshot, employ
   // Thu hồi object URL khi đóng/đổi ảnh để không giữ blob trong bộ nhớ.
   useEffect(() => () => { if (photo?.url) URL.revokeObjectURL(photo.url) }, [photo?.url])
 
-  const openPhoto = async (row: AttendanceRow) => {
-    const fileId = row.record?.checkInPhotoId
+  const photoIdOf = (row: AttendanceRow, kind: PhotoKind) =>
+    kind === 'check-in' ? row.record?.checkInPhotoId : checkOutPhotos.get(row.assignment.id)
+
+  const openPhoto = async (row: AttendanceRow, kind: PhotoKind) => {
+    const fileId = photoIdOf(row, kind)
     if (!fileId) return
-    setPhoto({ row })
+    setPhoto({ row, kind })
     try {
       const blob = await getAttendancePhoto(branchId, fileId)
       const url = URL.createObjectURL(blob)
       setPhoto((current) => {
-        if (current?.row !== row) {
+        if (current?.row !== row || current.kind !== kind) {
           URL.revokeObjectURL(url)
           return current
         }
-        return { row, url }
+        return { row, kind, url }
       })
     } catch (cause) {
-      setPhoto((current) => current?.row === row
-        ? { row, error: cause instanceof Error ? cause.message : 'Không tải được ảnh check-in.' }
+      setPhoto((current) => current?.row === row && current.kind === kind
+        ? { row, kind, error: cause instanceof Error ? cause.message : `Không tải được ảnh ${kind}.` }
         : current)
     }
   }
@@ -189,8 +225,12 @@ export default function AttendanceBoard({ branchId, branchName, snapshot, employ
                       {record?.source === 'admin' && <small className="hrm-attendance-source">Quản trị viên chấm</small>}
                     </td>
                     <td>
-                      {record?.checkInPhotoId
-                        ? <button type="button" className="hrm-attendance-photo" onClick={() => void openPhoto(row)}><Camera size={15} aria-hidden="true" /> Xem</button>
+                      {record?.checkInPhotoId || checkOutPhotos.has(assignment.id)
+                        ? (['check-in', 'check-out'] as const).filter((kind) => photoIdOf(row, kind)).map((kind) => (
+                            <button key={kind} type="button" className="hrm-attendance-photo" onClick={() => void openPhoto(row, kind)}>
+                              <Camera size={15} aria-hidden="true" /> {PHOTO_LABEL[kind]}
+                            </button>
+                          ))
                         : '—'}
                     </td>
                   </tr>
@@ -218,14 +258,14 @@ export default function AttendanceBoard({ branchId, branchName, snapshot, employ
         >
           <header className="assign-header">
             <h2 id="hrm-attendance-photo-title">
-              Ảnh check-in · {nameOf(photo.row)} · {formatVnClock(photo.row.record?.checkIn)} {dateLabel(photo.row.assignment.date)}
+              Ảnh {photo.kind} · {nameOf(photo.row)} · {formatVnClock(photo.kind === 'check-in' ? photo.row.record?.checkIn : photo.row.record?.checkOut)} {dateLabel(photo.row.assignment.date)}
             </h2>
             <button type="button" className="assign-close" aria-label="Đóng" onClick={() => setPhoto(null)}><X size={18} aria-hidden="true" /></button>
           </header>
           <div className="assign-form">
             {!photo.url && !photo.error && <p role="status">Đang tải ảnh…</p>}
             {photo.error && <p className="hrm-message hrm-message-error" role="alert">{photo.error}</p>}
-            {photo.url && <img src={photo.url} alt={`Ảnh check-in của ${nameOf(photo.row)}`} />}
+            {photo.url && <img src={photo.url} alt={`Ảnh ${photo.kind} của ${nameOf(photo.row)}`} />}
           </div>
         </dialog>
       )}

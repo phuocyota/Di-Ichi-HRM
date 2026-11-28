@@ -14,11 +14,14 @@ type Props = {
   editDisabled?: boolean
   onAssign?: (employee: WorkEmployee) => void
   assignDisabled?: boolean
+  /** Có quyền cho nghỉ việc (`canDeleteEmployee`). */
+  onDeactivate?: (employee: WorkEmployee) => void
+  deactivatingId?: string | null
 }
 
 const PAGE_SIZE = 15
 
-export default function EmployeeDirectory({ today, employees, assignments, unclassified, onViewSchedule, onEdit, editDisabled, onAssign, assignDisabled }: Props) {
+export default function EmployeeDirectory({ today, employees, assignments, unclassified, onViewSchedule, onEdit, editDisabled, onAssign, assignDisabled, onDeactivate, deactivatingId }: Props) {
   const [search, setSearch] = useState('')
   const [type, setType] = useState<EmployeeType | ''>('')
   const [page, setPage] = useState(1)
@@ -112,6 +115,11 @@ export default function EmployeeDirectory({ today, employees, assignments, uncla
                     )}
                     {employee.editProfile && (
                       <button type="button" aria-label={`Sửa hồ sơ của ${employee.name}`} disabled={editDisabled} onClick={() => onEdit(employee)}>Sửa</button>
+                    )}
+                    {onDeactivate && (
+                      <button type="button" aria-label={`Cho ${employee.name} nghỉ việc`} disabled={Boolean(deactivatingId)} onClick={() => onDeactivate(employee)}>
+                        {deactivatingId === employee.id ? 'Đang xử lý…' : 'Cho nghỉ việc'}
+                      </button>
                     )}
                   </div>
                 </td>

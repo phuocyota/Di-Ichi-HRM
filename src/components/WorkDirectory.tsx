@@ -1,6 +1,20 @@
 import { useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
-import { getWorkDirectory, type WorkDirectoryKind, type WorkDirectoryPage } from '../services/workDirectory.ts'
+import { ChevronLeft, ChevronRight, Search, UserPlus, X } from 'lucide-react'
+import EmployeeCredentialsDialog from './EmployeeCredentialsDialog.tsx'
+import TeacherDialog from './TeacherDialog.tsx'
+import {
+  createWorkTeacher,
+  deactivateWorkTeacher,
+  getWorkDirectory,
+  getWorkSpecialties,
+  updateWorkTeacher,
+  type WorkCredentials,
+  type WorkDirectoryKind,
+  type WorkDirectoryPage,
+  type WorkDirectoryPerson,
+  type WorkSpecialty,
+  type WorkTeacherInput,
+} from '../services/workDirectory.ts'
 import './EmployeeDirectory.css'
 import './WorkDirectory.css'
 
@@ -43,7 +57,16 @@ export default function WorkDirectory({
   const [input, setInput] = useState('')
   const [query, setQuery] = useState<DirectoryQuery>({ page: 1, size: 10, search: '', status: '' })
   const [result, setResult] = useState<Result>()
-  const current = result?.query === query && result.revision === revision ? result : undefined
+  /** Tăng sau mỗi lần thêm/sửa/cho nghỉ việc giáo viên để tải lại trang hiện tại. */
+  const [localRevision, setLocalRevision] = useState(0)
+  const loadRevision = revision * 1000 + localRevision
+  const [teacherForm, setTeacherForm] = useState<{ teacher?: WorkDirectoryPerson } | null>(null)
+  const [specialties, setSpecialties] = useState<WorkSpecialty[] | null>(null)
+  const [credentials, setCredentials] = useState<WorkCredentials | null>(null)
+  const [notice, setNotice] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [retiring, setRetiring] = useState<string | null>(null)
+  const current = result?.query === query && result.revision === loadRevision ? result : undefined
   const data = current?.data
   const { page, size, search, status } = query
   const sameFilter = result?.query.search === search && result.query.status === status
@@ -52,6 +75,55 @@ export default function WorkDirectory({
   const students = kind === 'students'
   const label = students ? 'học viên' : 'giáo viên'
   const statuses = students ? studentStatuses : teacherStatuses
+  const canManage = !students && Boolean(data?.canManage)
+
+  const openTeacherForm = async (teacher?: WorkDirectoryPerson) => {
+    setNotice('')
+    setActionError('')
+    if (!specialties) {
+      try {
+        setSpecialties(await getWorkSpecialties(branchId))
+      } catch (cause) {
+        setActionError(cause instanceof Error ? cause.message : 'Không tải được danh mục chuyên môn.')
+        return
+      }
+    }
+    setTeacherForm({ teacher })
+  }
+
+  const saveTeacher = async (input: WorkTeacherInput) => {
+    const editing = teacherForm?.teacher
+    if (editing) {
+      const saved = await updateWorkTeacher(branchId, editing.id, {
+        ...input,
+        email: input.email === editing.email ? undefined : input.email,
+      })
+      setNotice(`Đã cập nhật hồ sơ ${saved.name} (${saved.code}).`)
+    } else {
+      const saved = await createWorkTeacher(branchId, input)
+      setCredentials(saved.credentials)
+      setNotice(`Đã thêm giáo viên ${saved.name} (${saved.code}).`)
+    }
+    setTeacherForm(null)
+    setLocalRevision((value) => value + 1)
+  }
+
+  const retireTeacher = async (teacher: WorkDirectoryPerson) => {
+    if (retiring) return
+    if (!window.confirm(`Cho giáo viên ${teacher.name} (${teacher.code}) nghỉ việc? Tài khoản sẽ bị khóa, lịch sử dạy vẫn được giữ.`)) return
+    setRetiring(teacher.id)
+    setNotice('')
+    setActionError('')
+    try {
+      const saved = await deactivateWorkTeacher(branchId, teacher.id)
+      setNotice(`Đã cho giáo viên ${saved.name} (${saved.code}) nghỉ việc.`)
+      setLocalRevision((value) => value + 1)
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : 'Không cho nghỉ việc được.')
+    } finally {
+      setRetiring(null)
+    }
+  }
 
   useEffect(() => {
     if (input.trim() === search) return
@@ -68,20 +140,20 @@ export default function WorkDirectory({
         if (!active) return
         const lastPage = Math.max(1, Math.ceil(data.total / data.size))
         if (query.page > lastPage) setQuery({ ...query, page: lastPage })
-        else setResult({ query, revision, data })
+        else setResult({ query, revision: loadRevision, data })
       })
       .catch((cause) => {
         if (active)
           setResult({
             query,
-            revision,
+            revision: loadRevision,
             error: cause instanceof Error ? cause.message : `Không tải được danh sách ${label}.`,
           })
       })
     return () => {
       active = false
     }
-  }, [branchId, kind, label, query, revision])
+  }, [branchId, kind, label, loadRevision, query])
 
   return (
     <section className="hrm-panel hrm-people-directory" aria-label={`Bảng ${label}`}>
@@ -131,7 +203,14 @@ export default function WorkDirectory({
             <X size={15} aria-hidden="true" /> Xóa bộ lọc
           </button>
         )}
+        {canManage && (
+          <button type="button" className="hrm-add" onClick={() => void openTeacherForm()} disabled={Boolean(retiring)}>
+            <UserPlus size={15} aria-hidden="true" /> Thêm giáo viên
+          </button>
+        )}
       </form>
+      {notice && <p className="hrm-panel-message hrm-message-success" role="status">{notice}</p>}
+      {actionError && <p className="hrm-panel-message hrm-message-error" role="alert">{actionError}</p>}
       {!current && (
         <p className="hrm-panel-message" role="status">
           Đang tải danh sách {label}…
@@ -150,6 +229,8 @@ export default function WorkDirectory({
                 <th scope="col">Mã {students ? 'HV' : 'GV'}</th>
                 <th scope="col">Họ và tên</th>
                 <th scope="col">Trạng thái</th>
+                {canManage && <th scope="col">Chuyên môn</th>}
+                {canManage && <th scope="col">Thao tác</th>}
               </tr>
             </thead>
             <tbody>
@@ -178,12 +259,25 @@ export default function WorkDirectory({
                         {Object.hasOwn(statuses, value) ? statuses[value] : person.status || '—'}
                       </span>
                     </td>
+                    {canManage && <td>{person.specialty?.name ?? '—'}</td>}
+                    {canManage && (
+                      <td>
+                        <div className="hrm-directory-actions">
+                          <button type="button" aria-label={`Sửa hồ sơ của ${person.name}`} disabled={Boolean(retiring)} onClick={() => void openTeacherForm(person)}>Sửa</button>
+                          {value === 'active' && (
+                            <button type="button" aria-label={`Cho ${person.name} nghỉ việc`} disabled={Boolean(retiring)} onClick={() => void retireTeacher(person)}>
+                              {retiring === person.id ? 'Đang xử lý…' : 'Cho nghỉ việc'}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 )
               })}
               {!data.data.length && (
                 <tr>
-                  <td colSpan={3} className="hrm-directory-empty">
+                  <td colSpan={canManage ? 5 : 3} className="hrm-directory-empty">
                     {search || status ? `Không tìm thấy ${label} phù hợp.` : `Chi nhánh chưa có ${label}.`}
                   </td>
                 </tr>
@@ -236,6 +330,12 @@ export default function WorkDirectory({
           </button>
         </div>
       </footer>
+      {teacherForm && specialties && (
+        <TeacherDialog teacher={teacherForm.teacher} specialties={specialties} onSubmit={saveTeacher} onClose={() => setTeacherForm(null)} />
+      )}
+      {credentials && (
+        <EmployeeCredentialsDialog credentials={credentials} title="Tài khoản đăng nhập giáo viên" recipient="giáo viên" onClose={() => setCredentials(null)} />
+      )}
     </section>
   )
 }

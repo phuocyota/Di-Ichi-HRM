@@ -117,13 +117,17 @@ export const configureWorkShifts = (branchId: string, revision: number, shifts: 
   request<WorkSnapshot>('PUT', base(branchId), { revision, shifts })
 
 export const getEmployees = (branchId: string) =>
-  request<{ employees: WorkEmployee[]; unclassified: number; canCreateEmployee?: boolean }>('GET', `${base(branchId)}/employees`)
+  request<{ employees: WorkEmployee[]; unclassified: number; canCreateEmployee?: boolean; canDeleteEmployee?: boolean }>('GET', `${base(branchId)}/employees`)
 
 export const createWorkEmployee = (branchId: string, employee: NewWorkEmployee) =>
   request<CreatedWorkEmployee>('POST', `${base(branchId)}/employees`, employee)
 
 export const updateWorkEmployee = (branchId: string, id: string, employee: Omit<NewWorkEmployee, 'email'> & { email?: string }) =>
   request<Pick<WorkEmployee, 'id' | 'code' | 'name'>>('PATCH', `${base(branchId)}/employees/${encodeURIComponent(id)}`, employee)
+
+/** Cho nhân viên nghỉ việc: khóa tài khoản, ẩn khỏi danh sách phân ca, giữ lịch sử. */
+export const deactivateWorkEmployee = (branchId: string, id: string) =>
+  request<Pick<WorkEmployee, 'id' | 'code' | 'name'>>('DELETE', `${base(branchId)}/employees/${encodeURIComponent(id)}`)
 
 export const getWorkDepartments = (branchId: string) =>
   request<{ departments: WorkDepartment[]; canManage: boolean }>('GET', `${base(branchId)}/departments`)
@@ -159,6 +163,23 @@ export const removeAssignment = (branchId: string, assignmentId: string, revisio
     `${base(branchId)}/assignments/${encodeURIComponent(assignmentId)}?revision=${revision}`,
   )
 
-/** Ảnh nhân viên chụp khi tự check-in (cần quyền xem lịch của cơ sở). */
+/** Một lần nhân viên tự check-in/check-out (lịch sử `work_attendance_check`). */
+export type AttendanceCheck = {
+  id: string
+  type: 'check-in' | 'check-out'
+  checkAt: string
+  assignmentId: string
+  photoId: string | null
+  reason: string | null
+}
+
+/** Lịch sử check của cơ sở theo khoảng ngày YYYY-MM-DD (tối đa 62 ngày), mới nhất trước. */
+export const getAttendanceChecks = (branchId: string, from: string, to: string) =>
+  request<{ from: string; to: string; checks: AttendanceCheck[] }>(
+    'GET',
+    `${base(branchId)}/attendance-checks?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+  )
+
+/** Ảnh nhân viên chụp khi tự check-in/check-out (cần quyền xem lịch của cơ sở). */
 export const getAttendancePhoto = (branchId: string, fileId: string) =>
   requestBlob(`${base(branchId)}/attendance-photos/${encodeURIComponent(fileId)}`)
